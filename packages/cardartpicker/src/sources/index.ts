@@ -5,3 +5,4 @@ export function defineSource(s: Source): Source {
 }
 
 export { scryfall } from "./scryfall.js"
+export { mpcFill, createMpcFill } from "./mpcfill.js"

@@ -1,0 +1,6 @@
+{
+  "results": {
+    "id-aaa": { "identifier": "id-aaa", "name": "Sol Ring", "priority": 1, "source": 1, "source_name": "MrTeferi", "source_verbose": "MrTeferi", "dpi": 800, "language": "EN", "tags": [] },
+    "id-bbb": { "identifier": "id-bbb", "name": "Sol Ring", "priority": 2, "source": 2, "source_name": "Chilli_Axe", "source_verbose": "Chilli_Axe", "dpi": 1200, "language": "EN", "tags": ["full-art"] }
+  }
+}
