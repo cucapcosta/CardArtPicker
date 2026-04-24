@@ -1,0 +1,28 @@
+{
+  "data": [
+    {
+      "id": "abc-123",
+      "name": "Sol Ring",
+      "set": "C21",
+      "collector_number": "472",
+      "artist": "Mark Tedin",
+      "lang": "en",
+      "image_uris": {
+        "png": "https://cards.scryfall.io/png/front/a/b/abc-123.png",
+        "small": "https://cards.scryfall.io/small/front/a/b/abc-123.jpg"
+      }
+    },
+    {
+      "id": "def-456",
+      "name": "Sol Ring",
+      "set": "LEA",
+      "collector_number": "270",
+      "artist": "Mark Tedin",
+      "lang": "en",
+      "image_uris": {
+        "png": "https://cards.scryfall.io/png/front/d/e/def-456.png",
+        "small": "https://cards.scryfall.io/small/front/d/e/def-456.jpg"
+      }
+    }
+  ]
+}

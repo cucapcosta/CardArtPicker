@@ -1,0 +1,15 @@
+{
+  "data": [
+    {
+      "id": "arl-001",
+      "name": "Arlinn, the Pack's Hope // Arlinn, the Moon's Fury",
+      "set": "MID",
+      "collector_number": "217",
+      "lang": "en",
+      "card_faces": [
+        { "name": "Arlinn, the Pack's Hope", "image_uris": { "png": "https://cards.scryfall.io/png/front/a/r/arl-001-a.png" } },
+        { "name": "Arlinn, the Moon's Fury", "image_uris": { "png": "https://cards.scryfall.io/png/back/a/r/arl-001-b.png" } }
+      ]
+    }
+  ]
+}
