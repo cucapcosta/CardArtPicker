@@ -13,3 +13,4 @@ export function createHandlers(picker: Picker) {
 }
 export { buildZip } from "./download.js"
 export type { UploadResult } from "./upload.js"
+export { createActions } from "./actions.js"
