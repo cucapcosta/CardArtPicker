@@ -52,4 +52,14 @@ describe("mpcFill source", () => {
     await createMpcFill().getOptions({ name: "Treasure", type: "token" })
     expect(capturedBody).toMatchObject({ queries: [{ cardType: "TOKEN" }] })
   })
+
+  it("formats sources as [[pk, true], ...] tuples", async () => {
+    let capturedBody: { searchSettings: { sourceSettings: { sources: unknown[] } } } | undefined
+    server.use(http.post("https://mpcfill.com/2/editorSearch/", async ({ request }) => {
+      capturedBody = await request.json() as never
+      return HttpResponse.json({ results: { "sol ring": { CARD: [] } } })
+    }))
+    await createMpcFill().getOptions({ name: "Sol Ring", type: "card" })
+    expect(capturedBody?.searchSettings.sourceSettings.sources).toEqual([[1, true], [2, true]])
+  })
 })

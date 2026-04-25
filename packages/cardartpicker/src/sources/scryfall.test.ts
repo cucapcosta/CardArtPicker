@@ -48,4 +48,14 @@ describe("scryfall source", () => {
     const opts = await scryfall.getOptions({ name: "Sol Ring", setHint: "LEA", type: "card" })
     expect(opts[0].meta.setCode).toBe("LEA")
   })
+
+  it("adds layout:token filter for token queries", async () => {
+    let capturedQuery: string | null = null
+    server.use(http.get("https://api.scryfall.com/cards/search", ({ request }) => {
+      capturedQuery = new URL(request.url).searchParams.get("q")
+      return HttpResponse.json({ data: [] })
+    }))
+    await scryfall.getOptions({ name: "Treasure", type: "token" })
+    expect(capturedQuery).toContain("layout:token")
+  })
 })

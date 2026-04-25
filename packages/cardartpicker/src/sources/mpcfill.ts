@@ -35,7 +35,7 @@ export function createMpcFill(opts: MpcFillOptions = {}): Source {
       body: JSON.stringify({
         searchSettings: {
           searchTypeSettings: { fuzzySearch: false, filterCardbacks: false },
-          sourceSettings: { sources: sourcePKs },
+          sourceSettings: { sources: sourcePKs.map(pk => [pk, true]) },
           filterSettings: { minimumDPI: 0, maximumDPI: 1500, maximumSize: 30, languages: [], includesTags: [], excludesTags: [] },
         },
         queries: [{ query: id.name.toLowerCase(), cardType: id.type === "token" ? "TOKEN" : "CARD" }],

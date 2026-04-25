@@ -37,7 +37,8 @@ function mapCard(card: ScryfallCard): CardOption {
 }
 
 async function fetchScryfall(id: CardIdentifier): Promise<CardOption[]> {
-  const q = `!"${id.name.replace(/"/g, "")}"`
+  const exact = `!"${id.name.replace(/"/g, "")}"`
+  const q = id.type === "token" ? `${exact} layout:token` : exact
   const url = `https://api.scryfall.com/cards/search?unique=prints&q=${encodeURIComponent(q)}`
   const res = await fetch(url, { headers: { Accept: "application/json" } })
   if (!res.ok) {
