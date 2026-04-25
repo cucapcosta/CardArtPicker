@@ -1,8 +1,89 @@
+@import "tailwindcss";
+
+@source "../../../packages/cardartpicker/src";
+@source "../../../packages/cardartpicker/dist";
+
+@theme {
+  --color-ink: #0a0908;
+  --color-ink-soft: #14110e;
+  --color-surface: #1a1612;
+  --color-surface-raised: #221d18;
+  --color-edge: #3a3530;
+  --color-edge-soft: #2a2522;
+  --color-bone: #f0e5d2;
+  --color-bone-dim: #ccc1ad;
+  --color-muted: #8c8174;
+  --color-brass: #c8a06b;
+  --color-brass-deep: #a07d4a;
+  --color-brass-soft: #d9b886;
+  --color-crimson: #c0473e;
+  --color-verdigris: #5a8a73;
+
+  --font-display: "Cinzel", "Garamond", serif;
+  --font-sans: "Geist", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  --radius-frame: 3px;
+}
+
+:root {
+  /* consumer-overridable cardartpicker theme tokens */
+  --cap-bg: var(--color-ink);
+  --cap-fg: var(--color-bone);
+  --cap-muted: var(--color-muted);
+  --cap-border: var(--color-edge);
+  --cap-accent: var(--color-brass);
+  --cap-slot-bg: var(--color-surface);
+  --cap-slot-radius: var(--radius-frame);
+  --cap-font: var(--font-sans);
+}
+
 html, body { padding: 0; margin: 0; }
+
 body {
-  --cap-bg: #0f172a; --cap-fg: #f1f5f9; --cap-muted: #94a3b8;
-  --cap-border: #334155; --cap-accent: #f59e0b;
-  --cap-slot-bg: #1e293b; --cap-slot-radius: 8px;
-  --cap-font: "Inter", system-ui, sans-serif;
-  background: var(--cap-bg); color: var(--cap-fg); font-family: var(--cap-font);
+  background:
+    radial-gradient(ellipse 80rem 60rem at 15% -10%, color-mix(in oklab, var(--color-brass) 8%, transparent), transparent 60%),
+    radial-gradient(ellipse 70rem 50rem at 85% 110%, color-mix(in oklab, var(--color-verdigris) 6%, transparent), transparent 60%),
+    var(--color-ink);
+  color: var(--color-bone);
+  font-family: var(--font-sans);
+  font-feature-settings: "ss01", "cv11";
+  min-height: 100vh;
+  position: relative;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.06;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+::selection {
+  background: color-mix(in oklab, var(--color-brass) 50%, transparent);
+  color: var(--color-ink);
+}
+
+/* utility: thin layered frame evoking trading card border */
+.frame-card {
+  box-shadow:
+    inset 0 0 0 1px var(--color-edge),
+    inset 0 0 0 3px var(--color-ink),
+    inset 0 0 0 4px color-mix(in oklab, var(--color-brass) 30%, transparent);
+}
+
+.frame-card-active {
+  box-shadow:
+    inset 0 0 0 1px color-mix(in oklab, var(--color-brass) 70%, transparent),
+    inset 0 0 0 3px var(--color-ink),
+    inset 0 0 0 4px var(--color-brass);
+}
+
+.divider-brass {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--color-brass) 60%, transparent), transparent);
 }
