@@ -1,0 +1,25 @@
+# CardArtPicker
+
+> Next.js package for browsing and selecting Magic: The Gathering card/token
+> proxy art from Scryfall, MPC Fill, and custom developer-provided sources.
+
+## Core concepts
+- [Overview](./overview.md)
+- [Architecture](./architecture.md)
+- [Configuration](./configuration.md)
+
+## APIs
+- [Sources](./api/sources.md)
+- [Server handlers](./api/server.md)
+- [Hooks](./api/hooks.md)
+- [UI components](./api/ui.md)
+
+## Guides
+- [Quick start](./guides/quickstart.md)
+- [Adding a custom source](./guides/custom-source.md)
+- [Upload persistence](./guides/upload-persistence.md)
+- [Deployment](./guides/deployment.md)
+
+## Important defaults
+- `uploadPersistence` defaults to `"localStorage"` (5 MB cap, base64 data URLs, per-device)
+- All external network calls route through the developer's mounted `/api/cardartpicker/*` handler; client-side fetches to Scryfall/MPC Fill are never used
