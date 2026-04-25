@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, type ReactNode } from "react"
-import { CardPickerProvider, useCardPicker } from "../client/index.js"
+import { CardPickerProvider, useCardPicker } from "cardartpicker/client"
 import { ListImporter } from "./ListImporter.js"
 import { CardGrid } from "./CardGrid.js"
 import { OptionsModal } from "./OptionsModal.js"

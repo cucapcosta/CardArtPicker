@@ -1,6 +1,6 @@
 "use client"
 
-import { useCardPicker } from "../client/index.js"
+import { useCardPicker } from "cardartpicker/client"
 import styles from "./styles/CardArtPicker.module.css"
 
 export function OptionsModal({ slotId, onClose }: { slotId: string; onClose: () => void }) {

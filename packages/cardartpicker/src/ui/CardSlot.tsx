@@ -1,7 +1,7 @@
 "use client"
 
 import type { ChangeEvent } from "react"
-import { useCardPicker } from "../client/index.js"
+import { useCardPicker } from "cardartpicker/client"
 import type { Slot } from "../types.js"
 import styles from "./styles/CardArtPicker.module.css"
 

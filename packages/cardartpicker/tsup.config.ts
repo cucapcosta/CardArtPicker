@@ -8,7 +8,7 @@ const shared = {
   sourcemap: true,
   splitting: false,
   treeshake: true,
-  external: ["react", "react-dom", "next"],
+  external: ["react", "react-dom", "next", "cardartpicker/client"],
 }
 
 const CLIENT_FILES = [

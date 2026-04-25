@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { useCardPicker } from "../client/index.js"
+import { useCardPicker } from "cardartpicker/client"
 import styles from "./styles/CardArtPicker.module.css"
 
 export function ListImporter({ initialList = "" }: { initialList?: string }) {
