@@ -1,0 +1,87 @@
+/*
+ * cardartpicker default theme
+ * All tokens consumer-overridable via `:root` or any ancestor scope.
+ * The package UI binds Tailwind arbitrary values to these vars so the
+ * components render polished out-of-the-box without depending on a
+ * specific Tailwind palette in the consumer project.
+ */
+
+:root {
+  /* surfaces */
+  --cap-bg: #0c0a09;
+  --cap-bg-soft: #14110e;
+  --cap-surface: #1a1612;
+  --cap-surface-raised: #221d18;
+
+  /* text */
+  --cap-fg: #f0e5d2;
+  --cap-fg-dim: #ccc1ad;
+  --cap-muted: #8c8174;
+
+  /* edges */
+  --cap-border: #3a3530;
+  --cap-border-soft: #2a2522;
+
+  /* accents */
+  --cap-accent: #c8a06b;
+  --cap-accent-soft: #d9b886;
+  --cap-accent-deep: #a07d4a;
+  --cap-danger: #c0473e;
+  --cap-success: #5a8a73;
+
+  /* shape + type */
+  --cap-radius: 3px;
+  --cap-font: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --cap-font-display: "Cinzel", "Garamond", serif;
+  --cap-font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", monospace;
+}
+
+/* light scheme override — consumers can opt in by setting class="cap-light" or media query */
+@media (prefers-color-scheme: light) {
+  :root:where(:not([data-cap-theme="dark"])) {
+    --cap-bg: #faf6ec;
+    --cap-bg-soft: #f1ebde;
+    --cap-surface: #ffffff;
+    --cap-surface-raised: #fbfaf6;
+    --cap-fg: #1a1612;
+    --cap-fg-dim: #4d4438;
+    --cap-muted: #7a7164;
+    --cap-border: #d8cfb9;
+    --cap-border-soft: #e8e0cb;
+    --cap-accent: #8a6a3d;
+    --cap-accent-soft: #b08a55;
+    --cap-accent-deep: #5e4625;
+  }
+}
+
+/* trading-card double-frame visual */
+.cap-frame {
+  box-shadow:
+    inset 0 0 0 1px var(--cap-border),
+    inset 0 0 0 3px var(--cap-bg),
+    inset 0 0 0 4px color-mix(in oklab, var(--cap-accent) 30%, transparent);
+}
+
+.cap-frame-active {
+  box-shadow:
+    inset 0 0 0 1px color-mix(in oklab, var(--cap-accent) 70%, transparent),
+    inset 0 0 0 3px var(--cap-bg),
+    inset 0 0 0 4px var(--cap-accent);
+}
+
+/* horizontal accent rule with gradient fade */
+.cap-divider {
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--cap-accent) 60%, transparent),
+    transparent
+  );
+}
+
+/* dotted leader between label and value (used in sidebar rows) */
+.cap-dotted {
+  border-bottom: 1px dotted var(--cap-border);
+  translate: 0 -2px;
+}
