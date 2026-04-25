@@ -1,0 +1,8 @@
+html, body { padding: 0; margin: 0; }
+body {
+  --cap-bg: #0f172a; --cap-fg: #f1f5f9; --cap-muted: #94a3b8;
+  --cap-border: #334155; --cap-accent: #f59e0b;
+  --cap-slot-bg: #1e293b; --cap-slot-radius: 8px;
+  --cap-font: "Inter", system-ui, sans-serif;
+  background: var(--cap-bg); color: var(--cap-fg); font-family: var(--cap-font);
+}
