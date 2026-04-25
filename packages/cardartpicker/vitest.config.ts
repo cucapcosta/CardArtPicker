@@ -15,5 +15,8 @@ export default defineConfig({
       ["src/client/**", "jsdom"],
       ["src/ui/**", "jsdom"],
     ],
+    environmentOptions: {
+      jsdom: { url: "http://localhost/" },
+    },
   },
 })
