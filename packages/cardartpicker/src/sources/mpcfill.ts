@@ -64,7 +64,8 @@ export function createMpcFill(opts: MpcFillOptions = {}): Source {
         id: `mpcfill:${c.identifier}`,
         sourceName: "MPC Fill",
         cardName: c.name,
-        imageUrl: `${baseUrl}/2/image/${c.identifier}/`,
+        imageUrl: `https://lh3.googleusercontent.com/d/${c.identifier}=s0`,
+        thumbnailUrl: `https://lh3.googleusercontent.com/d/${c.identifier}=w400`,
         meta: { dpi: c.dpi, language: c.language, tags: c.tags },
       }]
     })

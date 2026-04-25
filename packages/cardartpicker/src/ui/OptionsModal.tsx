@@ -17,7 +17,7 @@ export function OptionsModal({ slotId, onClose }: { slotId: string; onClose: () 
     >
       <div
         onClick={e => e.stopPropagation()}
-        style={{ background: "var(--cap-bg)", padding: "1.5rem", borderRadius: 8, maxWidth: "80vw", maxHeight: "80vh", overflow: "auto" }}
+        style={{ background: "var(--cap-bg)", padding: "1.5rem", borderRadius: 8, width: "min(90vw, 1400px)", maxHeight: "85vh", overflow: "auto" }}
       >
         <h3>{slot.cardName} — pick art</h3>
         <div className={styles.grid}>
