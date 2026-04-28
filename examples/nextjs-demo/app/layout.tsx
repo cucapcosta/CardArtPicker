@@ -6,7 +6,7 @@ const cinzel = Cinzel({ subsets: ["latin"], weight: ["400", "500", "600", "700"]
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" })
 const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" })
 
-export const metadata = { title: "ProxyMart — Card Art Cabinet" }
+export const metadata = { title: "cardartpicker — demo" }
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (

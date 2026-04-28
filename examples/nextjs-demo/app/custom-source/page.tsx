@@ -1,6 +1,6 @@
 import { CardArtPicker } from "cardartpicker/ui"
-import { ShopHeader } from "@/components/ShopHeader"
-import { OrderSummary } from "@/components/OrderSummary"
+import { DemoHeader } from "@/components/DemoHeader"
+import { DownloadSummary } from "@/components/DownloadSummary"
 import { Footer } from "@/components/Footer"
 
 export default function CustomSource() {
@@ -9,7 +9,7 @@ export default function CustomSource() {
       <CardArtPicker
         initialList="1 Sol Ring"
         apiBase="/api/cardartpicker"
-        slots={{ header: <ShopHeader />, sidebar: <OrderSummary />, footer: <Footer /> }}
+        slots={{ header: <DemoHeader />, sidebar: <DownloadSummary />, footer: <Footer /> }}
       />
       <p style={{ color: "var(--cap-muted)" }}>
         Showcases &quot;My Proxies&quot; local-folder source alongside Scryfall and MPC Fill.

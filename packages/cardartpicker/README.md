@@ -3,7 +3,7 @@
 [![npm](https://img.shields.io/npm/v/cardartpicker.svg)](https://www.npmjs.com/package/cardartpicker)
 [![license](https://img.shields.io/npm/l/cardartpicker.svg)](https://github.com/cucapcosta/CardArtPicker/blob/main/LICENSE)
 
-Next.js drop-in for browsing and selecting Magic: The Gathering card and token proxy art across multiple sources (Scryfall, MPC Fill, custom).
+Next.js drop-in for browsing and selecting trading-card proxy art across multiple sources (Scryfall, MPC Fill, custom). The package is a transport — it queries upstream APIs and bundles selected images into a ZIP for personal printing. It does not host card art.
 
 ## Install
 
@@ -78,10 +78,18 @@ API: [Sources](https://github.com/cucapcosta/CardArtPicker/blob/main/docs/api/so
 
 Guides: [Quick start](https://github.com/cucapcosta/CardArtPicker/blob/main/docs/guides/quickstart.md) · [Custom source](https://github.com/cucapcosta/CardArtPicker/blob/main/docs/guides/custom-source.md) · [Upload persistence](https://github.com/cucapcosta/CardArtPicker/blob/main/docs/guides/upload-persistence.md) · [Deployment](https://github.com/cucapcosta/CardArtPicker/blob/main/docs/guides/deployment.md)
 
-## Disclaimer
+## Attribution
 
-Not affiliated with Wizards of the Coast. Magic: The Gathering, card names, and related marks are trademarks of Wizards of the Coast LLC. This library is a tool for personal proxy printing — verify the terms of any upstream source (Scryfall, MPC Fill) before use.
+Card data and Scryfall-sourced images come from [Scryfall](https://scryfall.com), used per their [API guidelines](https://scryfall.com/docs/api). If you ship a public app using this package, surface a "card data via Scryfall" credit in your UI. The bundled `scryfall` adapter caches results server-side; raise `cacheTTL` to ≥86400 (24h) in production to respect Scryfall's caching policy.
+
+The `mpcFill` adapter queries [MPC Fill](https://mpcfill.com), a third-party community project. Opt in by including it in your `sources` array; omit if you don't want it.
+
+## Personal-use notice
+
+For personal, non-commercial proxy printing only. Trading-card games and individual card illustrations are protected by trademark and copyright held by their publishers and artists. You are responsible for ensuring your use of this tool, the upstream sources, and any printed output complies with applicable law and the rights-holders' terms.
+
+Not affiliated with, endorsed by, or sponsored by Wizards of the Coast LLC, Scryfall LLC, MPC Fill, or any trading-card-game publisher.
 
 ## License
 
-MIT — see [LICENSE](https://github.com/cucapcosta/CardArtPicker/blob/main/LICENSE).
+MIT — see [LICENSE](https://github.com/cucapcosta/CardArtPicker/blob/main/LICENSE). MIT disclaims all warranty; this README is not legal advice.

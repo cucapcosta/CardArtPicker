@@ -9,7 +9,7 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       id-token: write
     steps:
       - uses: actions/checkout@v4
@@ -27,6 +27,20 @@ jobs:
       - run: pnpm --filter cardartpicker build
       - run: pnpm --filter cardartpicker test
 
-      - run: pnpm --filter cardartpicker publish --no-git-checks --access public --provenance
+      - name: Pack tarball
+        run: pnpm --filter cardartpicker pack --pack-destination ${{ github.workspace }}
+
+      - name: Publish to npm
+        run: pnpm --filter cardartpicker publish --no-git-checks --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --generate-notes \
+            ./cardartpicker-*.tgz

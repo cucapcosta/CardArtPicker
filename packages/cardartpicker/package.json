@@ -1,14 +1,13 @@
 {
   "name": "cardartpicker",
   "version": "0.1.0",
-  "description": "Next.js drop-in for browsing and selecting Magic: The Gathering card and token proxy art across multiple sources (Scryfall, MPC Fill, custom).",
+  "description": "Next.js drop-in for browsing and selecting trading-card proxy art across multiple sources, with a deck-list parser and ZIP downloader for personal printing.",
   "keywords": [
     "mtg",
-    "magic-the-gathering",
+    "tcg",
     "proxy",
     "card-art",
     "scryfall",
-    "mpcfill",
     "nextjs",
     "react"
   ],

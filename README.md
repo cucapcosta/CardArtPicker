@@ -1,6 +1,6 @@
 # CardArtPicker
 
-Next.js drop-in for browsing and selecting Magic: The Gathering card and token proxy art across multiple sources (Scryfall, MPC Fill, custom).
+Next.js drop-in for browsing and selecting trading-card proxy art across multiple sources (Scryfall, MPC Fill, custom). The package is a transport — it queries upstream APIs and bundles selected images into a ZIP for personal printing. It does not host card art.
 
 ## Install
 
@@ -87,10 +87,18 @@ CardArtPicker/
 └── docs/                      # this documentation
 ```
 
-## Disclaimer
+## Attribution
 
-Not affiliated with Wizards of the Coast. Magic: The Gathering, card names, and related marks are trademarks of Wizards of the Coast LLC. Verify the terms of any upstream source (Scryfall, MPC Fill) before use.
+Card data and Scryfall-sourced images are provided by [Scryfall](https://scryfall.com), used per their [API guidelines](https://scryfall.com/docs/api). If you build something with this package and surface card data publicly, please credit Scryfall in your UI. The bundled `scryfall` adapter caches results server-side (default TTL 1 hour for development; raise to ≥24h for production deployments to respect Scryfall's caching policy).
+
+The `mpcFill` adapter queries [MPC Fill](https://mpcfill.com), a third-party community project for trading-card proxy aggregation. It is opt-in by composition — exclude it from your `sources` array if you do not want it.
+
+## Personal-use notice
+
+This tool is intended for personal, non-commercial proxy printing. Trading-card games (Magic: The Gathering, Pokémon, Yu-Gi-Oh, Lorcana, etc.) and individual card illustrations are protected by trademark and copyright held by their respective publishers and artists. Users are solely responsible for ensuring their use of this tool, the upstream sources, and any printed output complies with applicable law and the terms of those rights-holders.
+
+Not affiliated with, endorsed by, or sponsored by Wizards of the Coast LLC, Scryfall LLC, MPC Fill, or any trading-card-game publisher.
 
 ## License
 
-MIT — see [LICENSE](./LICENSE).
+MIT — see [LICENSE](./LICENSE). The MIT license disclaims all warranty; nothing in this repository constitutes legal advice.

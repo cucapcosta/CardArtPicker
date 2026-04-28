@@ -1,6 +1,6 @@
 import { CardArtPicker } from "cardartpicker/ui"
-import { ShopHeader } from "@/components/ShopHeader"
-import { OrderSummary } from "@/components/OrderSummary"
+import { DemoHeader } from "@/components/DemoHeader"
+import { DownloadSummary } from "@/components/DownloadSummary"
 import { Footer } from "@/components/Footer"
 
 const SAMPLE = `
@@ -18,7 +18,7 @@ export default function Home() {
       <CardArtPicker
         initialList={SAMPLE}
         apiBase="/api/cardartpicker"
-        slots={{ header: <ShopHeader />, sidebar: <OrderSummary />, footer: <Footer /> }}
+        slots={{ header: <DemoHeader />, sidebar: <DownloadSummary />, footer: <Footer /> }}
       />
     </main>
   )
