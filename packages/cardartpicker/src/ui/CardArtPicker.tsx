@@ -33,10 +33,13 @@ function SectionHeader({ label, count }: { label: string; count: number }) {
 }
 
 function Inner({ initialList, slots, onSelectionChange, onError }: Omit<CardArtPickerProps, "apiBase" | "className" | "eagerLoad">) {
-  const { list, download, selections, errors } = useCardPicker()
+  const { list, download, selections, errors, optionsProgress } = useCardPicker()
   const [openSlotId, setOpenSlotId] = useState<string | null>(null)
   const notFoundCount = [...list.mainboard, ...list.tokens].filter(s => s.status === "not-found").length
   const totalCount = list.mainboard.length + list.tokens.length
+  const progressPct = optionsProgress && optionsProgress.total > 0
+    ? Math.round((optionsProgress.loaded / optionsProgress.total) * 100)
+    : 0
 
   useEffect(() => { onSelectionChange?.(selections) }, [selections, onSelectionChange])
   useEffect(() => { errors.forEach(e => onError?.(e)) }, [errors, onError])
@@ -67,6 +70,21 @@ function Inner({ initialList, slots, onSelectionChange, onError }: Omit<CardArtP
           </div>
 
           <ListImporter initialList={initialList ?? ""} />
+
+          {optionsProgress && (
+            <div className="font-[family-name:var(--cap-font-mono)] text-[0.65rem] uppercase tracking-[0.25em] text-[var(--cap-muted)]">
+              <div className="flex items-center justify-between gap-3 mb-1.5">
+                <span>indexing prints · {optionsProgress.loaded}/{optionsProgress.total}</span>
+                <span className="text-[var(--cap-accent-soft)]">{progressPct}%</span>
+              </div>
+              <div className="h-px bg-[var(--cap-border)] overflow-hidden">
+                <div
+                  className="h-px bg-[var(--cap-accent)] transition-[width] duration-300"
+                  style={{ width: `${progressPct}%` }}
+                />
+              </div>
+            </div>
+          )}
 
           {notFoundCount > 0 && (
             <div className="border-l-2 border-[var(--cap-danger)] bg-[var(--cap-danger)]/10 px-4 py-3 font-[family-name:var(--cap-font-mono)] text-[0.75rem] uppercase tracking-[0.18em] text-[var(--cap-danger)]">

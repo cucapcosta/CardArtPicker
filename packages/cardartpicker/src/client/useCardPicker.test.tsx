@@ -42,14 +42,24 @@ describe("useCardPicker", () => {
     expect(slot.selectedOptionId).toBe("scryfall:abc")
   })
 
-  it("lazy-loads all options on cycleOption", async () => {
+  it("background-loads all options after defaults", async () => {
     const { result } = renderHook(() => useCardPicker(), { wrapper: wrap })
     await act(() => result.current.parseList("1 Sol Ring"))
     await waitFor(() => expect(result.current.list.mainboard).toHaveLength(1))
     const slot = result.current.list.mainboard[0]!
-    expect(slot.options).toHaveLength(1)
-    await act(() => result.current.cycleOption(slot.id, "next"))
     await waitFor(() => expect(result.current.getSlot(slot.id)!.options.length).toBeGreaterThan(1))
+    await waitFor(() => expect(result.current.optionsProgress).toBeNull())
+  })
+
+  it("cycleOption rotates through filled options", async () => {
+    const { result } = renderHook(() => useCardPicker(), { wrapper: wrap })
+    await act(() => result.current.parseList("1 Sol Ring"))
+    await waitFor(() => expect(result.current.list.mainboard).toHaveLength(1))
+    const slot = result.current.list.mainboard[0]!
+    await waitFor(() => expect(result.current.getSlot(slot.id)!.options.length).toBeGreaterThan(1))
+    const before = result.current.getSlot(slot.id)!.selectedOptionId
+    await act(() => result.current.cycleOption(slot.id, "next"))
+    expect(result.current.getSlot(slot.id)!.selectedOptionId).not.toBe(before)
   })
 
   it("selectOption updates selections map", async () => {

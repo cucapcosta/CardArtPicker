@@ -1,22 +1,61 @@
 {
   "name": "cardartpicker",
-  "version": "0.0.1",
-  "private": true,
-  "description": "Next.js package for MTG card/token proxy art picking",
+  "version": "0.1.0",
+  "description": "Next.js drop-in for browsing and selecting Magic: The Gathering card and token proxy art across multiple sources (Scryfall, MPC Fill, custom).",
+  "keywords": [
+    "mtg",
+    "magic-the-gathering",
+    "proxy",
+    "card-art",
+    "scryfall",
+    "mpcfill",
+    "nextjs",
+    "react"
+  ],
+  "homepage": "https://github.com/cucapcosta/CardArtPicker#readme",
+  "bugs": {
+    "url": "https://github.com/cucapcosta/CardArtPicker/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cucapcosta/CardArtPicker.git",
+    "directory": "packages/cardartpicker"
+  },
+  "license": "MIT",
+  "author": "cucapcosta",
   "type": "module",
+  "sideEffects": [
+    "**/*.css",
+    "dist/client/**",
+    "dist/ui/**"
+  ],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "exports": {
     ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js", "require": "./dist/index.cjs" },
     "./sources": { "types": "./dist/sources/index.d.ts", "import": "./dist/sources/index.js", "require": "./dist/sources/index.cjs" },
     "./server": { "types": "./dist/server/index.d.ts", "import": "./dist/server/index.js", "require": "./dist/server/index.cjs" },
     "./client": { "types": "./dist/client/index.d.ts", "import": "./dist/client/index.js", "require": "./dist/client/index.cjs" },
-    "./ui": { "types": "./dist/ui/index.d.ts", "import": "./dist/ui/index.js", "require": "./dist/ui/index.cjs" }
+    "./ui": { "types": "./dist/ui/index.d.ts", "import": "./dist/ui/index.js", "require": "./dist/ui/index.cjs" },
+    "./styles.css": "./dist/ui/index.css"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "engines": {
+    "node": ">=20"
   },
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
     "test": "NODE_OPTIONS=--no-webstorage vitest run",
     "test:watch": "NODE_OPTIONS=--no-webstorage vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "pnpm build && pnpm test"
   },
   "dependencies": {
     "jszip": "^3.10.1",

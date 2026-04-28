@@ -1,9 +1,10 @@
 "use client"
 
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react"
-import type { CardIdentifier, CardOption, ParsedList, Selections, Slot, SourceResult } from "../types.js"
+import type { CardIdentifier, CardOption, CardType, ParsedList, Selections, Slot, SourceResult } from "../types.js"
 
 type ListState = { mainboard: Slot[]; tokens: Slot[] }
+type Progress = { loaded: number; total: number }
 
 export type PickerState = {
   apiBase: string
@@ -17,6 +18,7 @@ export type PickerState = {
   download: () => Promise<void>
   selections: Selections
   loading: boolean
+  optionsProgress: Progress | null
   errors: Error[]
 }
 
@@ -28,11 +30,26 @@ async function getJson<T>(url: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>
 }
 
+const nameKey = (type: CardType, name: string) => `${type}:${name.toLowerCase()}`
+
+async function runWithLimit<T>(items: T[], limit: number, fn: (t: T) => Promise<void>): Promise<void> {
+  let i = 0
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (i < items.length) {
+      const idx = i++
+      const item = items[idx]
+      if (item !== undefined) await fn(item)
+    }
+  })
+  await Promise.all(workers)
+}
+
 export function CardPickerProvider({ children, apiBase = "/api/cardartpicker" }: { children: ReactNode; apiBase?: string }) {
   const [list, setList] = useState<ListState>({ mainboard: [], tokens: [] })
   const [errors, setErrors] = useState<Error[]>([])
   const [loading, setLoading] = useState(false)
-  const expanded = useRef<Set<string>>(new Set())
+  const [optionsProgress, setOptionsProgress] = useState<Progress | null>(null)
+  const expandPromises = useRef<Map<string, Promise<void>>>(new Map())
 
   const updateSlot = useCallback((id: string, patch: Partial<Slot>) => {
     setList(prev => {
@@ -41,9 +58,43 @@ export function CardPickerProvider({ children, apiBase = "/api/cardartpicker" }:
     })
   }, [])
 
+  const expandByName = useCallback((type: CardType, name: string): Promise<void> => {
+    const key = nameKey(type, name)
+    const inflight = expandPromises.current.get(key)
+    if (inflight) return inflight
+    const promise = (async () => {
+      const params = new URLSearchParams({ name, type })
+      const results = await getJson<SourceResult[]>(`${apiBase}/options?${params}`)
+      const allOptions = results.flatMap(r => r.ok ? r.options : [])
+      const sourceErrors = results.flatMap(r => r.ok ? [] : [{ source: r.source, message: r.error.message }])
+      const nextStatus: Slot["status"] =
+        allOptions.length === 0 ? "not-found" : sourceErrors.length > 0 ? "partial" : "ready"
+      setList(prev => {
+        const mapper = (s: Slot): Slot => {
+          if (s.identifier.type !== type || s.cardName.toLowerCase() !== name.toLowerCase()) return s
+          return {
+            ...s,
+            options: allOptions,
+            selectedOptionId: s.selectedOptionId ?? allOptions[0]?.id ?? null,
+            status: nextStatus,
+            sourceErrors,
+          }
+        }
+        return { mainboard: prev.mainboard.map(mapper), tokens: prev.tokens.map(mapper) }
+      })
+    })().catch(e => {
+      expandPromises.current.delete(key)
+      throw e
+    })
+    expandPromises.current.set(key, promise)
+    return promise
+  }, [apiBase])
+
   const parseList = useCallback(async (text: string) => {
     setLoading(true)
-    expanded.current.clear()
+    setOptionsProgress(null)
+    expandPromises.current.clear()
+    let kicked: Slot[] = []
     try {
       const parsed = await getJson<ParsedList>(`${apiBase}/parse`, {
         method: "POST", body: JSON.stringify({ text }),
@@ -68,6 +119,7 @@ export function CardPickerProvider({ children, apiBase = "/api/cardartpicker" }:
       setList({ mainboard, tokens })
 
       const allSlots = [...mainboard, ...tokens]
+      kicked = allSlots
       await Promise.all(allSlots.map(async s => {
         try {
           const params = new URLSearchParams({ name: s.cardName, type: s.identifier.type })
@@ -79,33 +131,28 @@ export function CardPickerProvider({ children, apiBase = "/api/cardartpicker" }:
       }))
     } catch (e) {
       setErrors(es => [...es, e as Error])
-    } finally { setLoading(false) }
-  }, [apiBase, updateSlot])
-
-  const expandOptions = useCallback(async (slot: Slot) => {
-    if (expanded.current.has(slot.id)) return
-    expanded.current.add(slot.id)
-    const params = new URLSearchParams({ name: slot.cardName, type: slot.identifier.type })
-    try {
-      const results = await getJson<SourceResult[]>(`${apiBase}/options?${params}`)
-      const allOptions = results.flatMap(r => r.ok ? r.options : [])
-      const sourceErrors = results.flatMap(r => r.ok ? [] : [{ source: r.source, message: r.error.message }])
-      const nextStatus: Slot["status"] = allOptions.length === 0 ? "not-found" : sourceErrors.length > 0 ? "partial" : "ready"
-      updateSlot(slot.id, {
-        options: allOptions,
-        selectedOptionId: slot.selectedOptionId ?? allOptions[0]?.id ?? null,
-        status: nextStatus, sourceErrors,
-      })
-    } catch (e) {
-      updateSlot(slot.id, { status: "error" })
-      setErrors(es => [...es, e as Error])
+    } finally {
+      setLoading(false)
     }
-  }, [apiBase, updateSlot])
+
+    if (kicked.length === 0) return
+    const groups = new Map<string, { type: CardType; name: string }>()
+    for (const s of kicked) {
+      const k = nameKey(s.identifier.type, s.cardName)
+      if (!groups.has(k)) groups.set(k, { type: s.identifier.type, name: s.cardName })
+    }
+    const work = [...groups.values()]
+    setOptionsProgress({ loaded: 0, total: work.length })
+    void runWithLimit(work, 4, async g => {
+      try { await expandByName(g.type, g.name) } catch (e) { setErrors(es => [...es, e as Error]) }
+      setOptionsProgress(p => p ? { loaded: p.loaded + 1, total: p.total } : p)
+    }).then(() => setOptionsProgress(null))
+  }, [apiBase, updateSlot, expandByName])
 
   const cycleOption = useCallback(async (slotId: string, dir: "next" | "prev") => {
     const slot = [...list.mainboard, ...list.tokens].find(s => s.id === slotId)
     if (!slot) return
-    await expandOptions(slot)
+    try { await expandByName(slot.identifier.type, slot.cardName) } catch { return }
     setList(prev => {
       const mapper = (s: Slot): Slot => {
         if (s.id !== slotId || s.options.length === 0) return s
@@ -117,7 +164,7 @@ export function CardPickerProvider({ children, apiBase = "/api/cardartpicker" }:
       }
       return { mainboard: prev.mainboard.map(mapper), tokens: prev.tokens.map(mapper) }
     })
-  }, [list, expandOptions])
+  }, [list, expandByName])
 
   const selectOption = useCallback((slotId: string, optionId: string) => {
     updateSlot(slotId, { selectedOptionId: optionId })
@@ -179,7 +226,7 @@ export function CardPickerProvider({ children, apiBase = "/api/cardartpicker" }:
 
   const value: PickerState = {
     apiBase, list, parseList, getSlot, cycleOption, selectOption, flipSlot,
-    uploadCustom, download, selections, loading, errors,
+    uploadCustom, download, selections, loading, optionsProgress, errors,
   }
 
   return <PickerContext.Provider value={value}>{children}</PickerContext.Provider>

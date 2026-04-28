@@ -4,13 +4,11 @@ Next.js drop-in for browsing and selecting Magic: The Gathering card and token p
 
 ## Install
 
-Private package, distributed via Git URL.
-
 ```bash
-pnpm add cardartpicker@github:cucapcosta/CardArtPicker
+pnpm add cardartpicker
 ```
 
-Requires Next.js 15 (App Router) and React 19.
+Requires Next.js 15 (App Router), React 19, and Tailwind CSS v4 in the consuming app.
 
 ## Quick start
 
@@ -89,6 +87,10 @@ CardArtPicker/
 └── docs/                      # this documentation
 ```
 
+## Disclaimer
+
+Not affiliated with Wizards of the Coast. Magic: The Gathering, card names, and related marks are trademarks of Wizards of the Coast LLC. Verify the terms of any upstream source (Scryfall, MPC Fill) before use.
+
 ## License
 
-Private. Not for redistribution.
+MIT — see [LICENSE](./LICENSE).

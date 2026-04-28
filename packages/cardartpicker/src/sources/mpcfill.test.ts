@@ -27,8 +27,8 @@ describe("mpcFill source", () => {
       meta: { dpi: 800, language: "EN", tags: [] },
     })
     expect(opts[0].id).toBe("mpcfill:id-aaa")
-    expect(opts[0].imageUrl).toBe("https://lh3.googleusercontent.com/d/id-aaa=s0")
-    expect(opts[0].thumbnailUrl).toBe("https://lh3.googleusercontent.com/d/id-aaa=w400")
+    expect(opts[0].imageUrl).toBe("https://drive.google.com/thumbnail?id=id-aaa&sz=w1600")
+    expect(opts[0].thumbnailUrl).toBe("https://drive.google.com/thumbnail?id=id-aaa&sz=w400")
   })
 
   it("returns empty when search has zero hits", async () => {
