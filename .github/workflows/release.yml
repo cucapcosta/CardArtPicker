@@ -54,7 +54,8 @@ jobs:
       - run: pnpm --filter cardartpicker test
 
       - name: Pack tarball
-        run: pnpm --filter cardartpicker pack --pack-destination ${{ github.workspace }}
+        working-directory: packages/cardartpicker
+        run: pnpm pack --pack-destination ${{ github.workspace }}
 
       - name: Publish to npm
         run: pnpm --filter cardartpicker publish --no-git-checks --access public --provenance
