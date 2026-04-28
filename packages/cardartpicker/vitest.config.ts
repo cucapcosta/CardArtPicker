@@ -1,7 +1,12 @@
 import { defineConfig } from "vitest/config"
 
+const nodeMajor = Number(process.versions.node.split(".")[0])
+const execArgv = nodeMajor >= 25 ? ["--no-webstorage"] : []
+
 export default defineConfig({
   test: {
+    pool: "forks",
+    poolOptions: { forks: { execArgv } },
     environment: "node",
     globals: false,
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
