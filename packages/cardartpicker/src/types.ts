@@ -26,14 +26,22 @@ export type CardOption = {
   }
 }
 
+export type SourcePageOptions = { offset?: number; limit?: number }
+
+export type SourcePage = {
+  options: CardOption[]
+  total: number
+  hasMore: boolean
+}
+
 export type Source = {
   name: string
-  getOptions(id: CardIdentifier): Promise<CardOption[]>
+  getOptions(id: CardIdentifier, opts?: SourcePageOptions): Promise<SourcePage>
   getImage?(optionId: string): Promise<ArrayBuffer>
 }
 
 export type SourceResult =
-  | { ok: true; source: string; options: CardOption[] }
+  | { ok: true; source: string; options: CardOption[]; total: number; hasMore: boolean }
   | { ok: false; source: string; error: { code: string; message: string } }
 
 export type ParsedLine = { quantity: number } & CardIdentifier
@@ -57,6 +65,8 @@ export type Slot = {
   flipped: boolean
   status: SlotStatus
   sourceErrors: Array<{ source: string; message: string }>
+  totalOptions: number
+  hasMoreOptions: boolean
 }
 
 export type Selections = Record<string, string>
@@ -85,6 +95,7 @@ export type PickerConfig = {
   cacheBackend?: CacheAdapter
   parserStrict?: boolean
   sourceTimeoutMs?: number
+  optionsPageSize?: number
   logger?: Logger
   onDownloadStart?: (selections: Selection[]) => void
   onDownloadComplete?: (zip: Blob) => void
@@ -92,8 +103,8 @@ export type PickerConfig = {
 }
 
 export type Picker = {
-  readonly config: Required<Pick<PickerConfig, "cacheTTL" | "sourceTimeoutMs" | "parserStrict">> & PickerConfig
-  searchCard(id: CardIdentifier): Promise<SourceResult[]>
+  readonly config: Required<Pick<PickerConfig, "cacheTTL" | "sourceTimeoutMs" | "parserStrict" | "optionsPageSize">> & PickerConfig
+  searchCard(id: CardIdentifier, opts?: SourcePageOptions): Promise<SourceResult[]>
   getDefaultPrint(name: string, type?: CardType): Promise<CardOption | null>
   buildZip(selections: Selection[]): Promise<Blob>
   parseList(text: string): ParsedList

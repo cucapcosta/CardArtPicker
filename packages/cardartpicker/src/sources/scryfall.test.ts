@@ -21,32 +21,36 @@ afterAll(() => server.close())
 
 describe("scryfall source", () => {
   it("returns multiple prints as CardOptions", async () => {
-    const opts = await scryfall.getOptions({ name: "Sol Ring", type: "card" })
-    expect(opts).toHaveLength(2)
-    expect(opts[0]).toMatchObject({
+    const { options, total, hasMore } = await scryfall.getOptions({ name: "Sol Ring sr-1", type: "card" })
+    expect(options).toHaveLength(2)
+    expect(total).toBe(2)
+    expect(hasMore).toBe(false)
+    expect(options[0]).toMatchObject({
       sourceName: "Scryfall",
       cardName: "Sol Ring",
       imageUrl: "https://cards.scryfall.io/png/front/a/b/abc-123.png",
       meta: { setCode: "C21", collectorNumber: "472", artist: "Mark Tedin" },
     })
-    expect(opts[0].id).toBe("scryfall:abc-123")
+    expect(options[0]!.id).toBe("scryfall:abc-123")
   })
 
   it("maps DFC faces into back image", async () => {
-    const opts = await scryfall.getOptions({ name: "Arlinn, the Pack's Hope // Arlinn, the Moon's Fury", type: "card" })
-    expect(opts).toHaveLength(1)
-    expect(opts[0].imageUrl).toBe("https://cards.scryfall.io/png/front/a/r/arl-001-a.png")
-    expect(opts[0].backImageUrl).toBe("https://cards.scryfall.io/png/back/a/r/arl-001-b.png")
+    const { options } = await scryfall.getOptions({ name: "Arlinn, the Pack's Hope // Arlinn, the Moon's Fury", type: "card" })
+    expect(options).toHaveLength(1)
+    expect(options[0]!.imageUrl).toBe("https://cards.scryfall.io/png/front/a/r/arl-001-a.png")
+    expect(options[0]!.backImageUrl).toBe("https://cards.scryfall.io/png/back/a/r/arl-001-b.png")
   })
 
   it("returns [] when Scryfall has no matches", async () => {
-    const opts = await scryfall.getOptions({ name: "Nonexistent", type: "card" })
-    expect(opts).toEqual([])
+    const { options, total, hasMore } = await scryfall.getOptions({ name: "Nonexistent", type: "card" })
+    expect(options).toEqual([])
+    expect(total).toBe(0)
+    expect(hasMore).toBe(false)
   })
 
   it("boosts print matching setHint to the front of the list", async () => {
-    const opts = await scryfall.getOptions({ name: "Sol Ring", setHint: "LEA", type: "card" })
-    expect(opts[0].meta.setCode).toBe("LEA")
+    const { options } = await scryfall.getOptions({ name: "Sol Ring lea-test", setHint: "LEA", type: "card" })
+    expect(options[0]!.meta.setCode).toBe("LEA")
   })
 
   it("adds layout:token filter for token queries", async () => {
@@ -57,5 +61,15 @@ describe("scryfall source", () => {
     }))
     await scryfall.getOptions({ name: "Treasure", type: "token" })
     expect(capturedQuery).toContain("layout:token")
+  })
+
+  it("paginates results via offset/limit", async () => {
+    const first = await scryfall.getOptions({ name: "Sol Ring page-test", type: "card" }, { offset: 0, limit: 1 })
+    expect(first.options).toHaveLength(1)
+    expect(first.total).toBe(2)
+    expect(first.hasMore).toBe(true)
+    const second = await scryfall.getOptions({ name: "Sol Ring page-test", type: "card" }, { offset: 1, limit: 1 })
+    expect(second.options).toHaveLength(1)
+    expect(second.hasMore).toBe(false)
   })
 })

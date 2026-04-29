@@ -1,6 +1,6 @@
 import type {
   CacheAdapter, CardIdentifier, CardOption, CardType, Logger, ParsedList,
-  Picker, PickerConfig, Selection, Source, SourceResult,
+  Picker, PickerConfig, Selection, Source, SourcePageOptions, SourceResult,
 } from "./types.js"
 import { parseDeckList } from "./parser/decklist.js"
 import { createMemoryCache } from "./cache.js"
@@ -24,15 +24,16 @@ export function createPicker(config: PickerConfig): Picker {
     cacheTTL: config.cacheTTL ?? 3600,
     sourceTimeoutMs: config.sourceTimeoutMs ?? 10_000,
     parserStrict: config.parserStrict ?? false,
+    optionsPageSize: config.optionsPageSize ?? 100,
     ...config,
   }
   const logger = config.logger ?? defaultLogger
   const cache: CacheAdapter = config.cacheBackend ?? createMemoryCache<SourceResult[]>({ defaultTtlSeconds: resolved.cacheTTL })
 
-  async function runSource(src: Source, id: CardIdentifier): Promise<SourceResult> {
+  async function runSource(src: Source, id: CardIdentifier, pageOpts: SourcePageOptions): Promise<SourceResult> {
     try {
-      const options = await withTimeout(src.getOptions(id), resolved.sourceTimeoutMs)
-      return { ok: true, source: src.name, options }
+      const page = await withTimeout(src.getOptions(id, pageOpts), resolved.sourceTimeoutMs)
+      return { ok: true, source: src.name, options: page.options, total: page.total, hasMore: page.hasMore }
     } catch (e) {
       const err = e as { code?: string; message?: string }
       const code = err.code ?? "error"
@@ -44,15 +45,17 @@ export function createPicker(config: PickerConfig): Picker {
 
   const inflight = new Map<string, Promise<SourceResult[]>>()
 
-  async function searchCard(id: CardIdentifier): Promise<SourceResult[]> {
-    const key = `search:${id.type}:${id.name.toLowerCase()}`
+  async function searchCard(id: CardIdentifier, opts: SourcePageOptions = {}): Promise<SourceResult[]> {
+    const offset = Math.max(0, opts.offset ?? 0)
+    const limit = Math.max(1, opts.limit ?? resolved.optionsPageSize)
+    const key = `search:${id.type}:${id.name.toLowerCase()}:${offset}:${limit}`
     const cached = await cache.get<SourceResult[]>(key)
     if (cached) return cached
     const existing = inflight.get(key)
     if (existing) return existing
     const promise = (async () => {
       try {
-        const results = await Promise.all(config.sources.map(s => runSource(s, id)))
+        const results = await Promise.all(config.sources.map(s => runSource(s, id, { offset, limit })))
         const allOk = results.every(r => r.ok)
         if (allOk) await cache.set(key, results, resolved.cacheTTL)
         return results
@@ -65,7 +68,7 @@ export function createPicker(config: PickerConfig): Picker {
   }
 
   async function getDefaultPrint(name: string, type: CardType = "card"): Promise<CardOption | null> {
-    const results = await searchCard({ name, type })
+    const results = await searchCard({ name, type }, { offset: 0, limit: 1 })
     for (const r of results) {
       if (r.ok && r.options.length > 0) {
         const first = r.options[0]

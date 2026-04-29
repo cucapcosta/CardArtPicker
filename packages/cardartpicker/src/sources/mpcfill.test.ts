@@ -19,23 +19,37 @@ afterAll(() => server.close())
 describe("mpcFill source", () => {
   it("fetches sources, searches, hydrates card data", async () => {
     const src = createMpcFill()
-    const opts = await src.getOptions({ name: "Sol Ring", type: "card" })
-    expect(opts).toHaveLength(2)
-    expect(opts[0]).toMatchObject({
+    const { options, total, hasMore } = await src.getOptions({ name: "Sol Ring", type: "card" })
+    expect(options).toHaveLength(2)
+    expect(total).toBe(2)
+    expect(hasMore).toBe(false)
+    expect(options[0]).toMatchObject({
       sourceName: "MPC Fill",
       cardName: "Sol Ring",
       meta: { dpi: 800, language: "EN", tags: [] },
     })
-    expect(opts[0].id).toBe("mpcfill:id-aaa")
-    expect(opts[0].imageUrl).toBe("https://drive.google.com/thumbnail?id=id-aaa&sz=w1600")
-    expect(opts[0].thumbnailUrl).toBe("https://drive.google.com/thumbnail?id=id-aaa&sz=w400")
+    expect(options[0]!.id).toBe("mpcfill:id-aaa")
+    expect(options[0]!.imageUrl).toBe("https://drive.google.com/thumbnail?id=id-aaa&sz=w1600")
+    expect(options[0]!.thumbnailUrl).toBe("https://drive.google.com/thumbnail?id=id-aaa&sz=w400")
   })
 
   it("returns empty when search has zero hits", async () => {
     server.use(http.post("https://mpcfill.com/2/editorSearch/", () =>
       HttpResponse.json({ results: { "unknown card": { CARD: [] } } })))
-    const opts = await createMpcFill().getOptions({ name: "Unknown Card", type: "card" })
-    expect(opts).toEqual([])
+    const { options, total } = await createMpcFill().getOptions({ name: "Unknown Card", type: "card" })
+    expect(options).toEqual([])
+    expect(total).toBe(0)
+  })
+
+  it("paginates: ID list cached, hydrate sliced", async () => {
+    const src = createMpcFill()
+    const first = await src.getOptions({ name: "Sol Ring", type: "card" }, { offset: 0, limit: 1 })
+    expect(first.options).toHaveLength(1)
+    expect(first.total).toBe(2)
+    expect(first.hasMore).toBe(true)
+    const second = await src.getOptions({ name: "Sol Ring", type: "card" }, { offset: 1, limit: 1 })
+    expect(second.options).toHaveLength(1)
+    expect(second.hasMore).toBe(false)
   })
 
   it("propagates search 500 as thrown error", async () => {

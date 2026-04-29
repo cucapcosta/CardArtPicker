@@ -6,7 +6,7 @@ const makeSource = (name: string, opts: CardOption[] | Error): Source => ({
   name,
   getOptions: vi.fn(async () => {
     if (opts instanceof Error) throw opts
-    return opts
+    return { options: opts, total: opts.length, hasMore: false }
   }),
 })
 

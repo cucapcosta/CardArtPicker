@@ -6,6 +6,8 @@ import type { CardIdentifier, CardOption, CardType, ParsedList, Selections, Slot
 type ListState = { mainboard: Slot[]; tokens: Slot[] }
 type Progress = { loaded: number; total: number }
 
+const PAGE_SIZE = 100
+
 export type PickerState = {
   apiBase: string
   list: ListState
@@ -14,6 +16,7 @@ export type PickerState = {
   cycleOption: (slotId: string, dir: "next" | "prev") => Promise<void>
   selectOption: (slotId: string, optionId: string) => void
   flipSlot: (slotId: string) => void
+  loadMoreOptions: (slotId: string) => Promise<void>
   uploadCustom: (slotId: string, file: File) => Promise<void>
   download: () => Promise<void>
   selections: Selections
@@ -32,6 +35,7 @@ async function getJson<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 const nameKey = (type: CardType, name: string) => `${type}:${name.toLowerCase()}`
+const pageKey = (type: CardType, name: string, page: number) => `${nameKey(type, name)}:${page}`
 
 async function runWithLimit<T>(items: T[], limit: number, fn: (t: T) => Promise<void>): Promise<void> {
   let i = 0
@@ -53,6 +57,9 @@ export function CardPickerProvider({ children, apiBase = "/api/cardartpicker" }:
   const [imageProgress, setImageProgress] = useState<Progress | null>(null)
   const expandPromises = useRef<Map<string, Promise<void>>>(new Map())
   const warmedUrls = useRef<Set<string>>(new Set())
+  const stateRef = useRef<ListState>({ mainboard: [], tokens: [] })
+
+  useEffect(() => { stateRef.current = list }, [list])
 
   const proxyUrl = useCallback((url: string): string => {
     if (!url) return url
@@ -75,32 +82,42 @@ export function CardPickerProvider({ children, apiBase = "/api/cardartpicker" }:
     })
   }, [])
 
-  const expandByName = useCallback((type: CardType, name: string): Promise<void> => {
-    const key = nameKey(type, name)
+  const expandPage = useCallback((type: CardType, name: string, page: number): Promise<void> => {
+    const key = pageKey(type, name, page)
     const inflight = expandPromises.current.get(key)
     if (inflight) return inflight
     const promise = (async () => {
-      const params = new URLSearchParams({ name, type })
+      const offset = page * PAGE_SIZE
+      const params = new URLSearchParams({ name, type, offset: String(offset), limit: String(PAGE_SIZE) })
       const results = await getJson<SourceResult[]>(`${apiBase}/options?${params}`)
-      const allOptionsRaw = results.flatMap(r => r.ok ? r.options : [])
-      const allOptions = allOptionsRaw.map(proxyOption)
+      const newOptionsRaw = results.flatMap(r => r.ok ? r.options : [])
+      const newOptions = newOptionsRaw.map(proxyOption)
       const sourceErrors = results.flatMap(r => r.ok ? [] : [{ source: r.source, message: r.error.message }])
-      const nextStatus: Slot["status"] =
-        allOptions.length === 0 ? "not-found" : sourceErrors.length > 0 ? "partial" : "ready"
+      const total = results.reduce((sum, r) => sum + (r.ok ? r.total : 0), 0)
+      const hasMore = results.some(r => r.ok && r.hasMore)
+
       setList(prev => {
         const mapper = (s: Slot): Slot => {
           if (s.identifier.type !== type || s.cardName.toLowerCase() !== name.toLowerCase()) return s
+          const merged = page === 0 ? newOptions : [...s.options, ...newOptions]
+          const seen = new Set<string>()
+          const deduped = merged.filter(o => { if (seen.has(o.id)) return false; seen.add(o.id); return true })
+          const status: Slot["status"] =
+            deduped.length === 0 ? "not-found" : sourceErrors.length > 0 ? "partial" : "ready"
           return {
             ...s,
-            options: allOptions,
-            selectedOptionId: s.selectedOptionId ?? allOptions[0]?.id ?? null,
-            status: nextStatus,
+            options: deduped,
+            selectedOptionId: s.selectedOptionId ?? deduped[0]?.id ?? null,
+            totalOptions: total,
+            hasMoreOptions: hasMore,
+            status,
             sourceErrors,
           }
         }
         return { mainboard: prev.mainboard.map(mapper), tokens: prev.tokens.map(mapper) }
       })
-      const thumbs = allOptions
+
+      const thumbs = newOptions
         .map(o => o.thumbnailUrl ?? o.imageUrl)
         .filter((u): u is string => Boolean(u) && !warmedUrls.current.has(u))
       if (thumbs.length > 0) {
@@ -117,7 +134,7 @@ export function CardPickerProvider({ children, apiBase = "/api/cardartpicker" }:
     })
     expandPromises.current.set(key, promise)
     return promise
-  }, [apiBase])
+  }, [apiBase, proxyOption])
 
   const parseList = useCallback(async (text: string) => {
     setLoading(true)
@@ -143,6 +160,7 @@ export function CardPickerProvider({ children, apiBase = "/api/cardartpicker" }:
               identifier,
               options: [], selectedOptionId: null, flipped: false,
               status: "loading", sourceErrors: [],
+              totalOptions: 0, hasMoreOptions: false,
             }
           }))
       const mainboard = build(parsed.mainboard, "mainboard")
@@ -156,7 +174,7 @@ export function CardPickerProvider({ children, apiBase = "/api/cardartpicker" }:
           const params = new URLSearchParams({ name: s.cardName, type: s.identifier.type })
           const raw = await getJson<CardOption>(`${apiBase}/default?${params}`)
           const opt = proxyOption(raw)
-          updateSlot(s.id, { options: [opt], selectedOptionId: opt.id, status: "ready" })
+          updateSlot(s.id, { options: [opt], selectedOptionId: opt.id, status: "ready", totalOptions: 1, hasMoreOptions: true })
         } catch {
           updateSlot(s.id, { status: "not-found" })
         }
@@ -176,27 +194,46 @@ export function CardPickerProvider({ children, apiBase = "/api/cardartpicker" }:
     const work = [...groups.values()]
     setOptionsProgress({ loaded: 0, total: work.length })
     void runWithLimit(work, 4, async g => {
-      try { await expandByName(g.type, g.name) } catch (e) { setErrors(es => [...es, e as Error]) }
+      try { await expandPage(g.type, g.name, 0) } catch (e) { setErrors(es => [...es, e as Error]) }
       setOptionsProgress(p => p ? { loaded: p.loaded + 1, total: p.total } : p)
     }).then(() => setOptionsProgress(null))
-  }, [apiBase, updateSlot, expandByName, proxyOption])
+  }, [apiBase, updateSlot, expandPage, proxyOption])
 
   const cycleOption = useCallback(async (slotId: string, dir: "next" | "prev") => {
-    const slot = [...list.mainboard, ...list.tokens].find(s => s.id === slotId)
+    const ref = stateRef.current
+    const slot = [...ref.mainboard, ...ref.tokens].find(s => s.id === slotId)
     if (!slot) return
-    try { await expandByName(slot.identifier.type, slot.cardName) } catch { return }
+    try { await expandPage(slot.identifier.type, slot.cardName, 0) } catch { return }
+
+    const after = stateRef.current
+    const cur = [...after.mainboard, ...after.tokens].find(s => s.id === slotId) ?? slot
+    const i = cur.options.findIndex(o => o.id === cur.selectedOptionId)
+    const tentativeNext = dir === "next" ? i + 1 : i - 1
+    if (dir === "next" && tentativeNext >= cur.options.length && cur.hasMoreOptions) {
+      const nextPage = Math.floor(cur.options.length / PAGE_SIZE)
+      try { await expandPage(cur.identifier.type, cur.cardName, nextPage) } catch {}
+    }
+
     setList(prev => {
       const mapper = (s: Slot): Slot => {
         if (s.id !== slotId || s.options.length === 0) return s
-        const i = s.options.findIndex(o => o.id === s.selectedOptionId)
-        const nextIdx = dir === "next" ? (i + 1) % s.options.length : (i - 1 + s.options.length) % s.options.length
+        const idx = s.options.findIndex(o => o.id === s.selectedOptionId)
+        const nextIdx = dir === "next" ? (idx + 1) % s.options.length : (idx - 1 + s.options.length) % s.options.length
         const nextOpt = s.options[nextIdx]
         if (!nextOpt) return s
         return { ...s, selectedOptionId: nextOpt.id }
       }
       return { mainboard: prev.mainboard.map(mapper), tokens: prev.tokens.map(mapper) }
     })
-  }, [list, expandByName])
+  }, [expandPage])
+
+  const loadMoreOptions = useCallback(async (slotId: string) => {
+    const slot = [...stateRef.current.mainboard, ...stateRef.current.tokens].find(s => s.id === slotId)
+    if (!slot || !slot.hasMoreOptions) return
+    const nextPage = Math.floor(slot.options.length / PAGE_SIZE)
+    try { await expandPage(slot.identifier.type, slot.cardName, nextPage) }
+    catch (e) { setErrors(es => [...es, e as Error]) }
+  }, [expandPage])
 
   const selectOption = useCallback((slotId: string, optionId: string) => {
     updateSlot(slotId, { selectedOptionId: optionId })
@@ -266,7 +303,7 @@ export function CardPickerProvider({ children, apiBase = "/api/cardartpicker" }:
 
   const value: PickerState = {
     apiBase, list, parseList, getSlot, cycleOption, selectOption, flipSlot,
-    uploadCustom, download, selections, loading, optionsProgress, imageProgress, errors,
+    loadMoreOptions, uploadCustom, download, selections, loading, optionsProgress, imageProgress, errors,
   }
 
   return <PickerContext.Provider value={value}>{children}</PickerContext.Provider>

@@ -5,11 +5,11 @@ import { join } from "node:path"
 
 const myProxies = defineSource({
   name: "My Proxies",
-  async getOptions({ name }) {
+  async getOptions({ name }, opts = {}) {
     try {
       const dir = join(process.cwd(), "public", "my-proxies")
       const files = await readdir(dir)
-      return files
+      const all = files
         .filter(f => f.toLowerCase().includes(name.toLowerCase().replace(/[^a-z0-9]+/g, "-")))
         .map(f => ({
           id: `local:${f}`,
@@ -18,7 +18,11 @@ const myProxies = defineSource({
           imageUrl: `/my-proxies/${f}`,
           meta: {},
         }))
-    } catch { return [] }
+      const offset = Math.max(0, opts.offset ?? 0)
+      const limit = Math.max(1, opts.limit ?? (all.length || 1))
+      const slice = all.slice(offset, offset + limit)
+      return { options: slice, total: all.length, hasMore: offset + slice.length < all.length }
+    } catch { return { options: [], total: 0, hasMore: false } }
   },
 })
 

@@ -8,7 +8,7 @@ const opt = (id: string): CardOption => ({
   imageUrl: `https://x/${id}.png`, meta: {},
 })
 const makeSource = (name: string, options: CardOption[]): Source => ({
-  name, getOptions: vi.fn(async () => options),
+  name, getOptions: vi.fn(async () => ({ options, total: options.length, hasMore: false })),
 })
 const req = (url: string, init?: RequestInit): Request => new Request(`http://test${url}`, init)
 

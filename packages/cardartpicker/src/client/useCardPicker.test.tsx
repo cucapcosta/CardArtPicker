@@ -9,8 +9,8 @@ import type { ReactNode } from "react"
 
 const defaultOption = { id: "scryfall:abc", sourceName: "Scryfall", cardName: "Sol Ring", imageUrl: "https://x/sol.png", meta: {} }
 const moreOptions = [
-  { ok: true, source: "Scryfall", options: [defaultOption] },
-  { ok: true, source: "MPC Fill", options: [{ id: "mpcfill:xyz", sourceName: "MPC Fill", cardName: "Sol Ring", imageUrl: "https://x/sol-mpc.png", meta: {} }] },
+  { ok: true, source: "Scryfall", options: [defaultOption], total: 1, hasMore: false },
+  { ok: true, source: "MPC Fill", options: [{ id: "mpcfill:xyz", sourceName: "MPC Fill", cardName: "Sol Ring", imageUrl: "https://x/sol-mpc.png", meta: {} }], total: 1, hasMore: false },
 ]
 
 const server = setupServer(

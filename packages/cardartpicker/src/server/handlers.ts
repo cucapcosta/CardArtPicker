@@ -32,7 +32,11 @@ export function createGetHandler(
     }
     if (route === "options") {
       if (!name) return new Response(JSON.stringify({ error: "missing name" }), { status: 400, headers: jsonHeaders })
-      const results = await picker.searchCard({ name, type })
+      const offsetRaw = url.searchParams.get("offset")
+      const limitRaw = url.searchParams.get("limit")
+      const offset = offsetRaw !== null && Number.isFinite(Number(offsetRaw)) ? Math.max(0, Number(offsetRaw)) : 0
+      const limit = limitRaw !== null && Number.isFinite(Number(limitRaw)) ? Math.max(1, Math.min(500, Number(limitRaw))) : undefined
+      const results = await picker.searchCard({ name, type }, limit !== undefined ? { offset, limit } : { offset })
       return new Response(JSON.stringify(results), { status: 200, headers: jsonHeaders })
     }
     return new Response(JSON.stringify({ error: "not-found" }), { status: 404, headers: jsonHeaders })

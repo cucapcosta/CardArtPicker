@@ -1,11 +1,20 @@
 "use client"
 
+import { useState } from "react"
 import { useCardPicker } from "cardartpicker/client"
 
 export function OptionsModal({ slotId, onClose }: { slotId: string; onClose: () => void }) {
-  const { getSlot, selectOption } = useCardPicker()
+  const { getSlot, selectOption, loadMoreOptions } = useCardPicker()
+  const [loadingMore, setLoadingMore] = useState(false)
   const slot = getSlot(slotId)
   if (!slot) return null
+
+  const handleLoadMore = async () => {
+    if (loadingMore) return
+    setLoadingMore(true)
+    try { await loadMoreOptions(slot.id) }
+    finally { setLoadingMore(false) }
+  }
 
   const grouped = new Map<string, typeof slot.options>()
   for (const o of slot.options) {
@@ -37,7 +46,7 @@ export function OptionsModal({ slotId, onClose }: { slotId: string; onClose: () 
               {slot.cardName}
             </h2>
             <span className="font-[family-name:var(--cap-font-mono)] text-[0.7rem] text-[var(--cap-accent-soft)]">
-              {slot.options.length} options
+              {slot.options.length}{slot.totalOptions > slot.options.length ? ` / ${slot.totalOptions}` : ""} options
             </span>
           </div>
           <button
@@ -97,6 +106,17 @@ export function OptionsModal({ slotId, onClose }: { slotId: string; onClose: () 
           {slot.options.length === 0 && (
             <div className="py-16 text-center font-[family-name:var(--cap-font-mono)] text-sm text-[var(--cap-muted)] uppercase tracking-widest">
               no prints found
+            </div>
+          )}
+          {slot.hasMoreOptions && (
+            <div className="pt-2 flex justify-center">
+              <button
+                onClick={handleLoadMore}
+                disabled={loadingMore}
+                className="px-5 py-2 border border-[var(--cap-border)] hover:border-[var(--cap-accent)] disabled:opacity-40 disabled:cursor-wait text-[var(--cap-fg)] hover:text-[var(--cap-accent)] transition-colors font-[family-name:var(--cap-font-mono)] text-[0.7rem] uppercase tracking-[0.22em]"
+              >
+                {loadingMore ? "loading..." : `load ${Math.min(100, slot.totalOptions - slot.options.length)} more`}
+              </button>
             </div>
           )}
         </div>

@@ -1,5 +1,5 @@
 import pLimit from "p-limit"
-import type { CardIdentifier, CardOption, Source } from "../types.js"
+import type { CardIdentifier, CardOption, Source, SourcePage, SourcePageOptions } from "../types.js"
 import { defineSource } from "./index.js"
 import { withRetry } from "../retry.js"
 
@@ -88,7 +88,55 @@ async function fetchScryfall(id: CardIdentifier): Promise<CardOption[]> {
   })
 }
 
+type CacheEntry = { value: CardOption[]; expiresAt: number }
+const FULL_TTL_MS = 60 * 60 * 1000
+const FULL_MAX = 200
+const fullCache = new Map<string, CacheEntry>()
+const fullInflight = new Map<string, Promise<CardOption[]>>()
+
+function evictFull() {
+  while (fullCache.size > FULL_MAX) {
+    const first = fullCache.keys().next().value
+    if (first === undefined) break
+    fullCache.delete(first)
+  }
+}
+
+function cacheKey(id: CardIdentifier): string {
+  return `${id.type}:${id.name.toLowerCase()}:${(id.setHint ?? "").toLowerCase()}`
+}
+
+async function getFullList(id: CardIdentifier): Promise<CardOption[]> {
+  const k = cacheKey(id)
+  const hit = fullCache.get(k)
+  const now = Date.now()
+  if (hit && hit.expiresAt > now) {
+    fullCache.delete(k); fullCache.set(k, hit)
+    return hit.value
+  }
+  const existing = fullInflight.get(k)
+  if (existing) return existing
+  const promise = (async () => {
+    try {
+      const value = await scryfallLimit(() => fetchScryfall(id))
+      fullCache.set(k, { value, expiresAt: Date.now() + FULL_TTL_MS })
+      evictFull()
+      return value
+    } finally {
+      fullInflight.delete(k)
+    }
+  })()
+  fullInflight.set(k, promise)
+  return promise
+}
+
 export const scryfall: Source = defineSource({
   name: "Scryfall",
-  getOptions: id => scryfallLimit(() => fetchScryfall(id)),
+  async getOptions(id: CardIdentifier, opts: SourcePageOptions = {}): Promise<SourcePage> {
+    const all = await getFullList(id)
+    const offset = Math.max(0, opts.offset ?? 0)
+    const limit = Math.max(1, opts.limit ?? all.length)
+    const slice = all.slice(offset, offset + limit)
+    return { options: slice, total: all.length, hasMore: offset + slice.length < all.length }
+  },
 })

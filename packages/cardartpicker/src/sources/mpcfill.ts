@@ -1,4 +1,4 @@
-import type { CardIdentifier, CardOption, Source } from "../types.js"
+import type { CardIdentifier, CardOption, Source, SourcePage, SourcePageOptions } from "../types.js"
 import { defineSource } from "./index.js"
 import { withRetry } from "../retry.js"
 
@@ -16,9 +16,28 @@ export type MpcFillOptions = {
   sourceFilter?: number[]
 }
 
+const IDS_TTL_MS = 60 * 60 * 1000
+const IDS_MAX = 200
+
 export function createMpcFill(opts: MpcFillOptions = {}): Source {
   const baseUrl = opts.baseUrl ?? "https://mpcfill.com"
   let sourcesCache: MpcSource[] | null = null
+
+  type IdsEntry = { ids: string[]; expiresAt: number }
+  const idsCache = new Map<string, IdsEntry>()
+  const idsInflight = new Map<string, Promise<string[]>>()
+
+  function evictIds() {
+    while (idsCache.size > IDS_MAX) {
+      const first = idsCache.keys().next().value
+      if (first === undefined) break
+      idsCache.delete(first)
+    }
+  }
+
+  function idsKey(id: CardIdentifier): string {
+    return `${id.type}:${id.name.toLowerCase()}`
+  }
 
   async function loadSources(): Promise<MpcSource[]> {
     if (sourcesCache) return sourcesCache
@@ -47,6 +66,34 @@ export function createMpcFill(opts: MpcFillOptions = {}): Source {
     const byType = body.results[id.name.toLowerCase()] ?? {}
     const typeKey = id.type === "token" ? "TOKEN" : "CARD"
     return byType[typeKey] ?? []
+  }
+
+  async function getIds(id: CardIdentifier): Promise<string[]> {
+    const k = idsKey(id)
+    const hit = idsCache.get(k)
+    const now = Date.now()
+    if (hit && hit.expiresAt > now) {
+      idsCache.delete(k); idsCache.set(k, hit)
+      return hit.ids
+    }
+    const existing = idsInflight.get(k)
+    if (existing) return existing
+    const promise = (async () => {
+      try {
+        const ids = await withRetry(async () => {
+          const allSources = await loadSources()
+          const pks = opts.sourceFilter ?? allSources.map(s => s.pk)
+          return search(id, pks)
+        }, { attempts: 3, baseDelayMs: 300 })
+        idsCache.set(k, { ids, expiresAt: Date.now() + IDS_TTL_MS })
+        evictIds()
+        return ids
+      } finally {
+        idsInflight.delete(k)
+      }
+    })()
+    idsInflight.set(k, promise)
+    return promise
   }
 
   const HYDRATE_BATCH = 1000
@@ -84,13 +131,13 @@ export function createMpcFill(opts: MpcFillOptions = {}): Source {
 
   return defineSource({
     name: "MPC Fill",
-    async getOptions(id) {
-      return withRetry(async () => {
-        const allSources = await loadSources()
-        const pks = opts.sourceFilter ?? allSources.map(s => s.pk)
-        const ids = await search(id, pks)
-        return hydrate(ids)
-      }, { attempts: 3, baseDelayMs: 300 })
+    async getOptions(id: CardIdentifier, pageOpts: SourcePageOptions = {}): Promise<SourcePage> {
+      const ids = await getIds(id)
+      const offset = Math.max(0, pageOpts.offset ?? 0)
+      const limit = Math.max(1, pageOpts.limit ?? ids.length)
+      const slice = ids.slice(offset, offset + limit)
+      const options = await withRetry(() => hydrate(slice), { attempts: 3, baseDelayMs: 300 })
+      return { options, total: ids.length, hasMore: offset + slice.length < ids.length }
     },
   })
 }
