@@ -13,16 +13,26 @@ function slugify(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80)
 }
 
+function unwrapProxiedUrl(url: string): string {
+  const marker = "/img?u="
+  const idx = url.indexOf(marker)
+  if (idx === -1) return url
+  const enc = url.slice(idx + marker.length).split("&")[0]
+  if (!enc) return url
+  try { return decodeURIComponent(enc) } catch { return url }
+}
+
 async function fetchImage(
   option: CardOption,
   picker: Picker | null,
   opts: BuildZipOptions,
   face: "front" | "back" = "front",
 ): Promise<ArrayBuffer> {
-  const url = face === "back" ? option.backImageUrl : option.imageUrl
-  if (!url) throw new Error(`no ${face} image for option ${option.id}`)
+  const rawUrl = face === "back" ? option.backImageUrl : option.imageUrl
+  if (!rawUrl) throw new Error(`no ${face} image for option ${option.id}`)
   const src = picker?.config.sources.find(s => s.name === option.sourceName)
   if (face === "front" && src?.getImage) return src.getImage(option.id)
+  const url = unwrapProxiedUrl(rawUrl)
 
   return withRetry(async () => {
     const ctrl = new AbortController()

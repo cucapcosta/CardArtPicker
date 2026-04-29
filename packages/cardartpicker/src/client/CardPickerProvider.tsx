@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react"
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import type { CardIdentifier, CardOption, CardType, ParsedList, Selections, Slot, SourceResult } from "../types.js"
 
 type ListState = { mainboard: Slot[]; tokens: Slot[] }
@@ -19,6 +19,7 @@ export type PickerState = {
   selections: Selections
   loading: boolean
   optionsProgress: Progress | null
+  imageProgress: Progress | null
   errors: Error[]
 }
 
@@ -49,7 +50,23 @@ export function CardPickerProvider({ children, apiBase = "/api/cardartpicker" }:
   const [errors, setErrors] = useState<Error[]>([])
   const [loading, setLoading] = useState(false)
   const [optionsProgress, setOptionsProgress] = useState<Progress | null>(null)
+  const [imageProgress, setImageProgress] = useState<Progress | null>(null)
   const expandPromises = useRef<Map<string, Promise<void>>>(new Map())
+  const warmedUrls = useRef<Set<string>>(new Set())
+
+  const proxyUrl = useCallback((url: string): string => {
+    if (!url) return url
+    if (url.startsWith("data:") || url.startsWith("blob:")) return url
+    if (url.startsWith(apiBase)) return url
+    return `${apiBase}/img?u=${encodeURIComponent(url)}`
+  }, [apiBase])
+
+  const proxyOption = useCallback((opt: CardOption): CardOption => ({
+    ...opt,
+    imageUrl: proxyUrl(opt.imageUrl),
+    ...(opt.thumbnailUrl ? { thumbnailUrl: proxyUrl(opt.thumbnailUrl) } : {}),
+    ...(opt.backImageUrl ? { backImageUrl: proxyUrl(opt.backImageUrl) } : {}),
+  }), [proxyUrl])
 
   const updateSlot = useCallback((id: string, patch: Partial<Slot>) => {
     setList(prev => {
@@ -65,7 +82,8 @@ export function CardPickerProvider({ children, apiBase = "/api/cardartpicker" }:
     const promise = (async () => {
       const params = new URLSearchParams({ name, type })
       const results = await getJson<SourceResult[]>(`${apiBase}/options?${params}`)
-      const allOptions = results.flatMap(r => r.ok ? r.options : [])
+      const allOptionsRaw = results.flatMap(r => r.ok ? r.options : [])
+      const allOptions = allOptionsRaw.map(proxyOption)
       const sourceErrors = results.flatMap(r => r.ok ? [] : [{ source: r.source, message: r.error.message }])
       const nextStatus: Slot["status"] =
         allOptions.length === 0 ? "not-found" : sourceErrors.length > 0 ? "partial" : "ready"
@@ -82,6 +100,17 @@ export function CardPickerProvider({ children, apiBase = "/api/cardartpicker" }:
         }
         return { mainboard: prev.mainboard.map(mapper), tokens: prev.tokens.map(mapper) }
       })
+      const thumbs = allOptions
+        .map(o => o.thumbnailUrl ?? o.imageUrl)
+        .filter((u): u is string => Boolean(u) && !warmedUrls.current.has(u))
+      if (thumbs.length > 0) {
+        for (const u of thumbs) warmedUrls.current.add(u)
+        setImageProgress(p => ({ loaded: p?.loaded ?? 0, total: (p?.total ?? 0) + thumbs.length }))
+        void runWithLimit(thumbs, 6, async u => {
+          try { await fetch(u, { cache: "force-cache" }) } catch {}
+          setImageProgress(p => p ? { loaded: p.loaded + 1, total: p.total } : p)
+        })
+      }
     })().catch(e => {
       expandPromises.current.delete(key)
       throw e
@@ -93,7 +122,9 @@ export function CardPickerProvider({ children, apiBase = "/api/cardartpicker" }:
   const parseList = useCallback(async (text: string) => {
     setLoading(true)
     setOptionsProgress(null)
+    setImageProgress(null)
     expandPromises.current.clear()
+    warmedUrls.current.clear()
     let kicked: Slot[] = []
     try {
       const parsed = await getJson<ParsedList>(`${apiBase}/parse`, {
@@ -123,7 +154,8 @@ export function CardPickerProvider({ children, apiBase = "/api/cardartpicker" }:
       await Promise.all(allSlots.map(async s => {
         try {
           const params = new URLSearchParams({ name: s.cardName, type: s.identifier.type })
-          const opt = await getJson<CardOption>(`${apiBase}/default?${params}`)
+          const raw = await getJson<CardOption>(`${apiBase}/default?${params}`)
+          const opt = proxyOption(raw)
           updateSlot(s.id, { options: [opt], selectedOptionId: opt.id, status: "ready" })
         } catch {
           updateSlot(s.id, { status: "not-found" })
@@ -147,7 +179,7 @@ export function CardPickerProvider({ children, apiBase = "/api/cardartpicker" }:
       try { await expandByName(g.type, g.name) } catch (e) { setErrors(es => [...es, e as Error]) }
       setOptionsProgress(p => p ? { loaded: p.loaded + 1, total: p.total } : p)
     }).then(() => setOptionsProgress(null))
-  }, [apiBase, updateSlot, expandByName])
+  }, [apiBase, updateSlot, expandByName, proxyOption])
 
   const cycleOption = useCallback(async (slotId: string, dir: "next" | "prev") => {
     const slot = [...list.mainboard, ...list.tokens].find(s => s.id === slotId)
@@ -224,9 +256,17 @@ export function CardPickerProvider({ children, apiBase = "/api/cardartpicker" }:
     return Object.fromEntries(entries)
   }, [list])
 
+  useEffect(() => {
+    if (imageProgress && optionsProgress === null && imageProgress.loaded >= imageProgress.total) {
+      const t = setTimeout(() => setImageProgress(null), 600)
+      return () => clearTimeout(t)
+    }
+    return undefined
+  }, [imageProgress, optionsProgress])
+
   const value: PickerState = {
     apiBase, list, parseList, getSlot, cycleOption, selectOption, flipSlot,
-    uploadCustom, download, selections, loading, optionsProgress, errors,
+    uploadCustom, download, selections, loading, optionsProgress, imageProgress, errors,
   }
 
   return <PickerContext.Provider value={value}>{children}</PickerContext.Provider>

@@ -33,12 +33,15 @@ function SectionHeader({ label, count }: { label: string; count: number }) {
 }
 
 function Inner({ initialList, slots, onSelectionChange, onError }: Omit<CardArtPickerProps, "apiBase" | "className" | "eagerLoad">) {
-  const { list, download, selections, errors, optionsProgress } = useCardPicker()
+  const { list, download, selections, errors, optionsProgress, imageProgress } = useCardPicker()
   const [openSlotId, setOpenSlotId] = useState<string | null>(null)
   const notFoundCount = [...list.mainboard, ...list.tokens].filter(s => s.status === "not-found").length
   const totalCount = list.mainboard.length + list.tokens.length
-  const progressPct = optionsProgress && optionsProgress.total > 0
+  const optionsPct = optionsProgress && optionsProgress.total > 0
     ? Math.round((optionsProgress.loaded / optionsProgress.total) * 100)
+    : 0
+  const imagePct = imageProgress && imageProgress.total > 0
+    ? Math.round((imageProgress.loaded / imageProgress.total) * 100)
     : 0
 
   useEffect(() => { onSelectionChange?.(selections) }, [selections, onSelectionChange])
@@ -71,18 +74,30 @@ function Inner({ initialList, slots, onSelectionChange, onError }: Omit<CardArtP
 
           <ListImporter initialList={initialList ?? ""} />
 
-          {optionsProgress && (
-            <div className="font-[family-name:var(--cap-font-mono)] text-[0.65rem] uppercase tracking-[0.25em] text-[var(--cap-muted)]">
-              <div className="flex items-center justify-between gap-3 mb-1.5">
-                <span>indexing prints · {optionsProgress.loaded}/{optionsProgress.total}</span>
-                <span className="text-[var(--cap-accent-soft)]">{progressPct}%</span>
-              </div>
-              <div className="h-px bg-[var(--cap-border)] overflow-hidden">
-                <div
-                  className="h-px bg-[var(--cap-accent)] transition-[width] duration-300"
-                  style={{ width: `${progressPct}%` }}
-                />
-              </div>
+          {(optionsProgress || imageProgress) && (
+            <div className="font-[family-name:var(--cap-font-mono)] text-[0.65rem] uppercase tracking-[0.25em] text-[var(--cap-muted)] space-y-3">
+              {optionsProgress && (
+                <div>
+                  <div className="flex items-center justify-between gap-3 mb-1.5">
+                    <span>indexing prints · {optionsProgress.loaded}/{optionsProgress.total}</span>
+                    <span className="text-[var(--cap-accent-soft)]">{optionsPct}%</span>
+                  </div>
+                  <div className="h-px bg-[var(--cap-border)] overflow-hidden">
+                    <div className="h-px bg-[var(--cap-accent)] transition-[width] duration-300" style={{ width: `${optionsPct}%` }} />
+                  </div>
+                </div>
+              )}
+              {imageProgress && (
+                <div>
+                  <div className="flex items-center justify-between gap-3 mb-1.5">
+                    <span>caching images · {imageProgress.loaded}/{imageProgress.total}</span>
+                    <span className="text-[var(--cap-accent-soft)]">{imagePct}%</span>
+                  </div>
+                  <div className="h-px bg-[var(--cap-border)] overflow-hidden">
+                    <div className="h-px bg-[var(--cap-accent-soft)] transition-[width] duration-300" style={{ width: `${imagePct}%` }} />
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

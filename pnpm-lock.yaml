@@ -15,6 +15,37 @@ importers:
         specifier: ^5.6.0
         version: 5.9.3
 
+  examples/load-test:
+    dependencies:
+      cardartpicker:
+        specifier: workspace:*
+        version: link:../../packages/cardartpicker
+      next:
+        specifier: ^15.0.0
+        version: 15.5.15(@playwright/test@1.59.1)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      react:
+        specifier: ^19.0.0
+        version: 19.2.5
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.2.5(react@19.2.5)
+    devDependencies:
+      '@tailwindcss/postcss':
+        specifier: ^4.0.0
+        version: 4.2.4
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.17
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.2.14
+      tailwindcss:
+        specifier: ^4.0.0
+        version: 4.2.4
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
+
   examples/nextjs-demo:
     dependencies:
       cardartpicker:

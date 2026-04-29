@@ -42,13 +42,26 @@ export function createPicker(config: PickerConfig): Picker {
     }
   }
 
+  const inflight = new Map<string, Promise<SourceResult[]>>()
+
   async function searchCard(id: CardIdentifier): Promise<SourceResult[]> {
     const key = `search:${id.type}:${id.name.toLowerCase()}`
     const cached = await cache.get<SourceResult[]>(key)
     if (cached) return cached
-    const results = await Promise.all(config.sources.map(s => runSource(s, id)))
-    await cache.set(key, results, resolved.cacheTTL)
-    return results
+    const existing = inflight.get(key)
+    if (existing) return existing
+    const promise = (async () => {
+      try {
+        const results = await Promise.all(config.sources.map(s => runSource(s, id)))
+        const allOk = results.every(r => r.ok)
+        if (allOk) await cache.set(key, results, resolved.cacheTTL)
+        return results
+      } finally {
+        inflight.delete(key)
+      }
+    })()
+    inflight.set(key, promise)
+    return promise
   }
 
   async function getDefaultPrint(name: string, type: CardType = "card"): Promise<CardOption | null> {

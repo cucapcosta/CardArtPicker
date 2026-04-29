@@ -1,5 +1,6 @@
 import type { CardIdentifier, CardOption, Source } from "../types.js"
 import { defineSource } from "./index.js"
+import { withRetry } from "../retry.js"
 
 type MpcSource = { pk: number; key: string; name: string; description: string; sourceType: string; externalLink: string }
 type SearchResponse = { results: Record<string, Record<string, string[]>> }
@@ -48,17 +49,27 @@ export function createMpcFill(opts: MpcFillOptions = {}): Source {
     return byType[typeKey] ?? []
   }
 
-  async function hydrate(ids: string[]): Promise<CardOption[]> {
-    if (ids.length === 0) return []
+  const HYDRATE_BATCH = 1000
+
+  async function hydrateBatch(ids: string[]): Promise<CardsResponse["results"]> {
     const res = await fetch(`${baseUrl}/2/cards/`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ cardIdentifiers: ids }),
     })
-    if (!res.ok) throw new Error(`MPC Fill /cards/ ${res.status}`)
+    if (!res.ok) throw new Error(`MPC Fill /cards/ ${res.status}: ${await res.text()}`)
     const body = (await res.json()) as CardsResponse
+    return body.results
+  }
+
+  async function hydrate(ids: string[]): Promise<CardOption[]> {
+    if (ids.length === 0) return []
+    const batches: string[][] = []
+    for (let i = 0; i < ids.length; i += HYDRATE_BATCH) batches.push(ids.slice(i, i + HYDRATE_BATCH))
+    const results = await Promise.all(batches.map(hydrateBatch))
+    const merged: CardsResponse["results"] = Object.assign({}, ...results)
     return ids.flatMap(id => {
-      const c = body.results[id]
+      const c = merged[id]
       if (!c) return []
       return [{
         id: `mpcfill:${c.identifier}`,
@@ -74,10 +85,12 @@ export function createMpcFill(opts: MpcFillOptions = {}): Source {
   return defineSource({
     name: "MPC Fill",
     async getOptions(id) {
-      const allSources = await loadSources()
-      const pks = opts.sourceFilter ?? allSources.map(s => s.pk)
-      const ids = await search(id, pks)
-      return hydrate(ids)
+      return withRetry(async () => {
+        const allSources = await loadSources()
+        const pks = opts.sourceFilter ?? allSources.map(s => s.pk)
+        const ids = await search(id, pks)
+        return hydrate(ids)
+      }, { attempts: 3, baseDelayMs: 300 })
     },
   })
 }

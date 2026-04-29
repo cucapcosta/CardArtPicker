@@ -11,13 +11,18 @@ function getPathSegments(url: string): string[] {
 
 const jsonHeaders = { "Content-Type": "application/json" }
 
-export function createGetHandler(picker: Picker) {
+export function createGetHandler(
+  picker: Picker,
+  imageRoute?: (req: Request) => Promise<Response>,
+) {
   return async function GET(request: Request): Promise<Response> {
     const segs = getPathSegments(request.url)
     const route = segs[0] ?? ""
     const url = new URL(request.url)
     const name = url.searchParams.get("name") ?? ""
     const type = (url.searchParams.get("type") ?? "card") as CardType
+
+    if (route === "img" && imageRoute) return imageRoute(request)
 
     if (route === "default") {
       if (!name) return new Response(JSON.stringify({ error: "missing name" }), { status: 400, headers: jsonHeaders })
