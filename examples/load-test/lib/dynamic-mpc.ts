@@ -43,7 +43,7 @@ export const dynamicMpcSource: Source = {
   name: "MPC Fill",
   async getOptions(id: CardIdentifier, opts?: SourcePageOptions): Promise<SourcePage> {
     await refresh()
-    if (!inner) return { options: [], total: 0, hasMore: false }
+    if (!inner) throw Object.assign(new Error("mpc index not loaded"), { code: "not-loaded" })
     return inner.getOptions(id, opts)
   },
 }

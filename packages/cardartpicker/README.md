@@ -29,6 +29,8 @@ import { scryfall, mpcFill } from "cardartpicker/sources"
 export const picker = createPicker({ sources: [scryfall, mpcFill] })
 ```
 
+> Prefer `createMpcFillIndex` with our hosted JSON (`https://mtg.forjadeguerra.com.br/api/index-json`) over the live `mpcFill` source — no per-request fetches to mpcfill.com, O(1) in-memory lookups, and auto-refresh via `refreshMs` + `onRefresh: () => picker.clearCache()`. See [docs/api/sources.md](https://github.com/cucapcosta/CardArtPicker/blob/main/docs/api/sources.md#built-in-creatempcfillindex-pre-built-json-index).
+
 ```ts
 // app/api/cardartpicker/[...path]/route.ts
 import { createHandlers } from "cardartpicker/server"

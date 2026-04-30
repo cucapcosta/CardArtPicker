@@ -35,5 +35,6 @@ export function createMemoryCache<T = unknown>(opts: MemoryCacheOptions = {}): C
       evictIfNeeded()
     },
     async delete(key) { map.delete(key) },
+    async clear() { map.clear() },
   }
 }

@@ -77,6 +77,7 @@ export type CacheAdapter = {
   get<T>(key: string): Promise<T | undefined>
   set<T>(key: string, value: T, ttlSeconds?: number): Promise<void>
   delete(key: string): Promise<void>
+  clear?(): Promise<void>
 }
 
 export type UploadAdapter = {
@@ -108,4 +109,6 @@ export type Picker = {
   getDefaultPrint(name: string, type?: CardType): Promise<CardOption | null>
   buildZip(selections: Selection[]): Promise<Blob>
   parseList(text: string): ParsedList
+  /** Drop all cached search results. Call after the underlying index updates. */
+  clearCache(): Promise<void>
 }

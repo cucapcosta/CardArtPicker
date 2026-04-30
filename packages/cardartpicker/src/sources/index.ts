@@ -7,4 +7,4 @@ export function defineSource(s: Source): Source {
 export { scryfall } from "./scryfall.js"
 export { mpcFill, createMpcFill } from "./mpcfill.js"
 export { createMpcFillIndex } from "./mpcfill-index.js"
-export type { MpcFillIndexFile, MpcFillIndexEntry, MpcFillIndexOptions } from "./mpcfill-index.js"
+export type { MpcFillIndexFile, MpcFillIndexEntry, MpcFillIndexOptions, MpcFillIndexSource } from "./mpcfill-index.js"

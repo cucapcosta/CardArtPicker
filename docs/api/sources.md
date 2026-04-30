@@ -89,6 +89,73 @@ Pre-built `mpcFill` uses defaults. `createMpcFill({ baseUrl, sourceFilter })` le
 
 Source: `packages/cardartpicker/src/sources/mpcfill.ts`.
 
+## Built-in: `createMpcFillIndex` (pre-built JSON index)
+
+```ts
+import { createMpcFillIndex } from "cardartpicker/sources"
+import type { MpcFillIndexSource } from "cardartpicker/sources"
+```
+
+Reads an MPC Fill index JSON over HTTP and serves matches from memory. O(1) lookups, no per-request fan-out to a volunteer-run upstream.
+
+The hosted reference index lives at **`https://mtg.forjadeguerra.com.br/api/index-json`** and is updated periodically.
+
+```ts
+import { createPicker } from "cardartpicker"
+import { scryfall, createMpcFillIndex } from "cardartpicker/sources"
+
+const mpc = createMpcFillIndex({
+  indexUrl: "https://mtg.forjadeguerra.com.br/api/index-json",
+  refreshMs: 60 * 60 * 1000,        // optional, hourly poll
+  onRefresh: () => picker.clearCache(),
+})
+
+const picker = createPicker({ sources: [scryfall, mpc] })
+```
+
+### Options
+
+| Option | Type | Purpose |
+|---|---|---|
+| `indexUrl` | `string` | URL the source GETs (with `If-Modified-Since` on later polls) |
+| `index` | `MpcFillIndexFile` | Pass an in-memory file directly (skips fetch). Mutually exclusive with `indexUrl`. |
+| `sourceFilter` | `number[]` | Whitelist of MPC source PKs to keep |
+| `fetchInit` | `RequestInit` | Custom headers/agent on the fetch |
+| `refreshMs` | `number` | Poll interval. `0`/unset = no auto-refresh. |
+| `onRefresh` | `(info) => void` | Fired when a poll returns 200 and the cache was replaced. |
+
+### Returned source
+
+`createMpcFillIndex` returns `MpcFillIndexSource`, which extends `Source` with two extras:
+
+```ts
+type MpcFillIndexSource = Source & {
+  refresh(): Promise<boolean>   // force a refetch; returns true if cache changed
+  dispose(): void               // stop the refresh timer
+}
+```
+
+Use `refresh()` for manual triggers (e.g. a webhook from your admin), `dispose()` on shutdown.
+
+### Auto-update flow
+
+1. First call → fetches the URL, caches the parsed file in memory, stores `Last-Modified`.
+2. Every `refreshMs` → polls with `If-Modified-Since`.
+   - **304** → cache untouched, no body transferred.
+   - **200** → parse new body, swap inner cache atomically, fire `onRefresh`.
+3. Pair `onRefresh` with `picker.clearCache()` so stale page-keyed search results are dropped — otherwise the source is fresh but `picker.searchCard()` keeps serving cached pages until `cacheTTL` expires (default 1h, often configured higher).
+
+### Limitations
+
+- **Lag of up to `refreshMs`** between the index being updated and consumers seeing it. Smaller value = faster propagation, more 304 traffic. Bypass with a manual `source.refresh()`.
+- **Without `onRefresh: () => picker.clearCache()`** the source has fresh JSON but the picker still returns previously-cached search results until `cacheTTL` elapses. Always wire both together.
+- **Already-rendered browser sessions** keep showing the options they were given on slot mount. Only fresh requests (next slot click, page reload, SSR refetch) see the new index.
+- **Memory footprint** — the parsed index lives in memory. Today's MPC Fill index is ~34MB JSON / ~75MB parsed. Per process.
+- **`Last-Modified` granularity = 1 second.** Two updates inside the same second won't trigger a 200 on consumers polling between them. Not a real issue at human cadence.
+- **No CDN by default.** Requests hit your origin directly. For many consumers, put Cloudflare/etc. in front of the index URL — `Last-Modified` is set, so standard CDN revalidation works.
+
+Source: `packages/cardartpicker/src/sources/mpcfill-index.ts`.
+
 ## Custom sources
 
 ```ts

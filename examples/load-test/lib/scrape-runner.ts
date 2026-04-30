@@ -133,6 +133,12 @@ export async function startReindex(): Promise<{ ok: boolean; reason?: string }> 
     if (code !== 0) finished.error = logTail.slice(-5).join("\n").slice(0, 500)
     await saveMeta(finished)
     await unlink(PID_FILE).catch(() => {})
+    if (code === 0) {
+      try {
+        const { picker } = await import("./picker")
+        await picker.clearCache()
+      } catch {}
+    }
   })
 
   return { ok: true }

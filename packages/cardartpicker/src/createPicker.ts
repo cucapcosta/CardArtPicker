@@ -86,5 +86,10 @@ export function createPicker(config: PickerConfig): Picker {
     throw new Error("buildZip not available in this runtime — import from 'cardartpicker/server'")
   }
 
-  return { config: resolved, searchCard, getDefaultPrint, parseList, buildZip }
+  async function clearCache(): Promise<void> {
+    inflight.clear()
+    if (cache.clear) await cache.clear()
+  }
+
+  return { config: resolved, searchCard, getDefaultPrint, parseList, buildZip, clearCache }
 }

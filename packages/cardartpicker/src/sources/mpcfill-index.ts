@@ -23,6 +23,17 @@ export type MpcFillIndexOptions = {
   index?: MpcFillIndexFile
   sourceFilter?: number[]
   fetchInit?: RequestInit
+  /** Auto-poll the indexUrl every N ms with If-Modified-Since. 0/undefined = disabled. */
+  refreshMs?: number
+  /** Optional hook invoked when the cache is replaced with a newer index. */
+  onRefresh?: (info: { lastModified: string | null; bytes: number }) => void
+}
+
+export type MpcFillIndexSource = Source & {
+  /** Force a refetch. Returns true if cache was replaced with a newer body. */
+  refresh: () => Promise<boolean>
+  /** Stop the refresh timer (if refreshMs was set). */
+  dispose: () => void
 }
 
 function entryToOption(e: MpcFillIndexEntry, fallbackName: string): CardOption {
@@ -62,22 +73,55 @@ function normalizeBuckets(file: MpcFillIndexFile): MpcFillIndexFile {
   return out
 }
 
-export function createMpcFillIndex(opts: MpcFillIndexOptions): Source {
+export function createMpcFillIndex(opts: MpcFillIndexOptions): MpcFillIndexSource {
   let cached: MpcFillIndexFile | null = opts.index ? normalizeBuckets(opts.index) : null
+  let lastModified: string | null = null
   let inflight: Promise<MpcFillIndexFile> | null = null
+  let refreshInflight: Promise<boolean> | null = null
+  let timer: ReturnType<typeof setInterval> | null = null
+
+  async function fetchAndApply(): Promise<{ replaced: boolean; body?: MpcFillIndexFile; bytes?: number }> {
+    if (!opts.indexUrl) throw new Error("mpcFillIndex: provide opts.index or opts.indexUrl")
+    const headers = new Headers(opts.fetchInit?.headers)
+    if (lastModified) headers.set("If-Modified-Since", lastModified)
+    const res = await fetch(opts.indexUrl, { ...opts.fetchInit, headers })
+    if (res.status === 304) return { replaced: false }
+    if (!res.ok) throw new Error(`mpcFillIndex fetch ${res.status}`)
+    const text = await res.text()
+    const body = normalizeBuckets(JSON.parse(text) as MpcFillIndexFile)
+    cached = body
+    lastModified = res.headers.get("Last-Modified")
+    return { replaced: true, body, bytes: text.length }
+  }
 
   async function loadIndex(): Promise<MpcFillIndexFile> {
     if (cached) return cached
     if (inflight) return inflight
-    if (!opts.indexUrl) throw new Error("mpcFillIndex: provide opts.index or opts.indexUrl")
     inflight = (async () => {
-      const res = await fetch(opts.indexUrl!, opts.fetchInit)
-      if (!res.ok) throw new Error(`mpcFillIndex fetch ${res.status}`)
-      const body = normalizeBuckets((await res.json()) as MpcFillIndexFile)
-      cached = body
-      return body
+      const r = await fetchAndApply()
+      return r.body ?? cached!
     })()
-    return inflight
+    try { return await inflight } finally { inflight = null }
+  }
+
+  async function refresh(): Promise<boolean> {
+    if (!opts.indexUrl) return false
+    if (refreshInflight) return refreshInflight
+    refreshInflight = (async () => {
+      try {
+        const r = await fetchAndApply()
+        if (r.replaced) opts.onRefresh?.({ lastModified, bytes: r.bytes ?? 0 })
+        return r.replaced
+      } finally {
+        refreshInflight = null
+      }
+    })()
+    return refreshInflight
+  }
+
+  if (opts.refreshMs && opts.refreshMs > 0 && opts.indexUrl) {
+    timer = setInterval(() => { void refresh().catch(() => {}) }, opts.refreshMs)
+    if (typeof timer === "object" && timer && "unref" in timer) (timer as { unref: () => void }).unref()
   }
 
   const filterPks = opts.sourceFilter
@@ -85,7 +129,7 @@ export function createMpcFillIndex(opts: MpcFillIndexOptions): Source {
     ? (e: MpcFillIndexEntry) => e.s === undefined || filterPks.includes(e.s)
     : null
 
-  return defineSource({
+  const base = defineSource({
     name: "MPC Fill",
     async getOptions(id: CardIdentifier, page: SourcePageOptions = {}): Promise<SourcePage> {
       const idx = await loadIndex()
@@ -98,5 +142,10 @@ export function createMpcFillIndex(opts: MpcFillIndexOptions): Source {
       const options = slice.map(e => entryToOption(e, id.name))
       return { options, total: filtered.length, hasMore: offset + slice.length < filtered.length }
     },
+  })
+
+  return Object.assign(base, {
+    refresh,
+    dispose() { if (timer) { clearInterval(timer); timer = null } },
   })
 }

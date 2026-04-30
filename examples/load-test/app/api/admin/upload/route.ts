@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/admin-auth"
 import { applyUpload } from "@/lib/scrape-runner"
+import { picker } from "@/lib/picker"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -27,5 +28,6 @@ export async function POST(req: Request) {
 
   const r = await applyUpload(buf)
   if (!r.ok) return NextResponse.json({ error: r.reason }, { status: 400 })
+  await picker.clearCache().catch(() => {})
   return NextResponse.json({ ok: true, bytes: buf.length })
 }

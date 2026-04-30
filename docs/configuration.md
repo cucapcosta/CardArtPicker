@@ -98,6 +98,22 @@ downloadFilename: ({ selections }) =>
 
 `createPicker` returns `{ config, ... }` with required fields filled in. Read `picker.config.cacheTTL` etc. from your own code if you need to inspect what the picker is actually using.
 
+## `picker.clearCache()`
+
+Drops every entry in the page-keyed search cache and any in-flight promises. Call this whenever the underlying data your sources depend on has changed — e.g. after replacing the MPC Fill index file or rotating a custom DB.
+
+Wire it to the `MpcFillIndexSource.onRefresh` callback so consumers get fresh results immediately when the index changes:
+
+```ts
+const mpc = createMpcFillIndex({
+  indexUrl: "https://mtg.forjadeguerra.com.br/api/index-json",
+  refreshMs: 60 * 60 * 1000,
+  onRefresh: () => picker.clearCache(),
+})
+```
+
+Without this wiring, the source has fresh JSON but `picker.searchCard()` keeps returning previously-cached pages until `cacheTTL` elapses. See [api/sources.md → Limitations](./api/sources.md#limitations).
+
 ## See also
 
 - [api/sources.md](./api/sources.md)
