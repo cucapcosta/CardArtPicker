@@ -16,3 +16,11 @@ docs/superpowers
 .env
 .env.*
 !.env.example
+
+scripts/mpcfill-index.json
+scripts/mpcfill-index.json.gz
+scripts/.mpcfill-scrape-state.json
+scripts/.mpcfill-scrape-progress.json
+scripts/.mpcfill-meta.json
+scripts/.mpcfill-scrape.log
+scripts/.mpcfill-scrape.pid

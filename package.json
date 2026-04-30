@@ -8,7 +8,8 @@
     "lint": "pnpm -r lint",
     "dev:demo": "pnpm --filter nextjs-demo dev",
     "dev:loadtest": "pnpm --filter load-test dev",
-    "docs:llms": "tsx scripts/build-llm-docs.ts"
+    "docs:llms": "tsx scripts/build-llm-docs.ts",
+    "scrape:mpcfill": "tsx scripts/scrape-mpcfill-index.ts"
   },
   "devDependencies": {
     "typescript": "^5.6.0",

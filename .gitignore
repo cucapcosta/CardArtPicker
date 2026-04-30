@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .next/
+*.tsbuildinfo
 coverage/
 playwright-report/
 test-results/
@@ -9,3 +10,13 @@ test-results/
 .env.local
 docs/llms-full.txt
 docs/superpowers/
+
+# Scraper artifacts (large; built locally / on Railway volume)
+scripts/mpcfill-index.json
+scripts/mpcfill-index.json.gz
+scripts/.mpcfill-scrape-state.json
+scripts/.mpcfill-scrape-progress.json
+scripts/.mpcfill-meta.json
+scripts/.mpcfill-scrape.log
+scripts/.mpcfill-scrape.pid
+examples/load-test/public/mpcfill-index.json

@@ -38,10 +38,19 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
+ENV MPC_DATA_DIR=/data
+ENV MPC_FILL_INDEX_FILE=/data/mpcfill-index.json
+ENV MPC_STATE_FILE=/data/.mpcfill-scrape-state.json
+ENV MPC_PROGRESS_FILE=/data/.mpcfill-scrape-progress.json
+ENV MPC_SCRAPER_SCRIPT=/app/scripts/scrape-mpcfill-index.ts
+
+RUN npm i -g tsx@4 && mkdir -p /data
 
 COPY --from=builder /app/examples/load-test/.next/standalone ./
 COPY --from=builder /app/examples/load-test/.next/static ./examples/load-test/.next/static
 COPY --from=builder /app/examples/load-test/public ./examples/load-test/public
+COPY --from=builder /app/scripts ./scripts
 
+VOLUME ["/data"]
 EXPOSE 3000
 CMD ["node", "examples/load-test/server.js"]

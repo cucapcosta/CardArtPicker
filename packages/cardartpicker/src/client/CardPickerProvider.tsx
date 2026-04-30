@@ -61,19 +61,7 @@ export function CardPickerProvider({ children, apiBase = "/api/cardartpicker" }:
 
   useEffect(() => { stateRef.current = list }, [list])
 
-  const proxyUrl = useCallback((url: string): string => {
-    if (!url) return url
-    if (url.startsWith("data:") || url.startsWith("blob:")) return url
-    if (url.startsWith(apiBase)) return url
-    return `${apiBase}/img?u=${encodeURIComponent(url)}`
-  }, [apiBase])
-
-  const proxyOption = useCallback((opt: CardOption): CardOption => ({
-    ...opt,
-    imageUrl: proxyUrl(opt.imageUrl),
-    ...(opt.thumbnailUrl ? { thumbnailUrl: proxyUrl(opt.thumbnailUrl) } : {}),
-    ...(opt.backImageUrl ? { backImageUrl: proxyUrl(opt.backImageUrl) } : {}),
-  }), [proxyUrl])
+  const proxyOption = useCallback((opt: CardOption): CardOption => opt, [])
 
   const updateSlot = useCallback((id: string, patch: Partial<Slot>) => {
     setList(prev => {
@@ -118,13 +106,20 @@ export function CardPickerProvider({ children, apiBase = "/api/cardartpicker" }:
       })
 
       const thumbs = newOptions
+        .slice(0, 12)
         .map(o => o.thumbnailUrl ?? o.imageUrl)
         .filter((u): u is string => Boolean(u) && !warmedUrls.current.has(u))
       if (thumbs.length > 0) {
         for (const u of thumbs) warmedUrls.current.add(u)
         setImageProgress(p => ({ loaded: p?.loaded ?? 0, total: (p?.total ?? 0) + thumbs.length }))
-        void runWithLimit(thumbs, 6, async u => {
-          try { await fetch(u, { cache: "force-cache" }) } catch {}
+        void runWithLimit(thumbs, 4, async u => {
+          await new Promise<void>(resolve => {
+            const img = new Image()
+            const done = () => resolve()
+            img.onload = done
+            img.onerror = done
+            img.src = u
+          })
           setImageProgress(p => p ? { loaded: p.loaded + 1, total: p.total } : p)
         })
       }
