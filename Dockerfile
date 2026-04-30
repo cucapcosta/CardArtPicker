@@ -51,6 +51,5 @@ COPY --from=builder /app/examples/load-test/.next/static ./examples/load-test/.n
 COPY --from=builder /app/examples/load-test/public ./examples/load-test/public
 COPY --from=builder /app/scripts ./scripts
 
-VOLUME ["/data"]
 EXPOSE 3000
 CMD ["node", "examples/load-test/server.js"]
