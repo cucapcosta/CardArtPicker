@@ -58,8 +58,9 @@ export function CardPickerProvider({ children, apiBase = "/api/cardartpicker", e
   const expandPromises = useRef<Map<string, Promise<void>>>(new Map())
   const warmedUrls = useRef<Set<string>>(new Set())
   const stateRef = useRef<ListState>({ mainboard: [], tokens: [] })
-
-  useEffect(() => { stateRef.current = list }, [list])
+  // Sync during render (idempotent) so children's effects in the same commit see the
+  // current list — an effect-based sync runs after child effects and hands them stale state.
+  stateRef.current = list
 
   const proxyOption = useCallback((opt: CardOption): CardOption => opt, [])
 

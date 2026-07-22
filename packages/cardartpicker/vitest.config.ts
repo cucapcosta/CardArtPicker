@@ -4,6 +4,11 @@ const nodeMajor = Number(process.versions.node.split(".")[0])
 const execArgv = nodeMajor >= 25 ? ["--no-webstorage"] : []
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      "cardartpicker/client": new URL("./src/client/index.ts", import.meta.url).pathname,
+    },
+  },
   test: {
     pool: "forks",
     poolOptions: { forks: { execArgv } },

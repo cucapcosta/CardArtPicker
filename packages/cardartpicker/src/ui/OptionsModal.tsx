@@ -1,12 +1,26 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useCardPicker } from "cardartpicker/client"
 
 export function OptionsModal({ slotId, onClose }: { slotId: string; onClose: () => void }) {
   const { getSlot, selectOption, loadMoreOptions } = useCardPicker()
   const [loadingMore, setLoadingMore] = useState(false)
+  const autoLoaded = useRef(false)
   const slot = getSlot(slotId)
+
+  // The slot only holds its default print until options are fetched on demand;
+  // totalOptions <= options.length with hasMoreOptions set marks that unexpanded state.
+  const needsInitialLoad =
+    slot !== undefined && slot.hasMoreOptions && slot.totalOptions <= slot.options.length
+
+  useEffect(() => {
+    if (!needsInitialLoad || autoLoaded.current) return
+    autoLoaded.current = true
+    setLoadingMore(true)
+    void loadMoreOptions(slotId).finally(() => setLoadingMore(false))
+  }, [needsInitialLoad, loadMoreOptions, slotId])
+
   if (!slot) return null
 
   const handleLoadMore = async () => {
@@ -15,6 +29,8 @@ export function OptionsModal({ slotId, onClose }: { slotId: string; onClose: () 
     try { await loadMoreOptions(slot.id) }
     finally { setLoadingMore(false) }
   }
+
+  const remaining = slot.totalOptions - slot.options.length
 
   const grouped = new Map<string, typeof slot.options>()
   for (const o of slot.options) {
@@ -115,7 +131,7 @@ export function OptionsModal({ slotId, onClose }: { slotId: string; onClose: () 
                 disabled={loadingMore}
                 className="px-5 py-2 border border-[var(--cap-border)] hover:border-[var(--cap-accent)] disabled:opacity-40 disabled:cursor-wait text-[var(--cap-fg)] hover:text-[var(--cap-accent)] transition-colors font-[family-name:var(--cap-font-mono)] text-[0.7rem] uppercase tracking-[0.22em]"
               >
-                {loadingMore ? "loading..." : `load ${Math.min(100, slot.totalOptions - slot.options.length)} more`}
+                {loadingMore ? "loading..." : remaining > 0 ? `load ${Math.min(100, remaining)} more` : "load more"}
               </button>
             </div>
           )}
