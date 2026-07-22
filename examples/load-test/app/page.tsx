@@ -19,7 +19,7 @@ export default function Home() {
     <main>
       <div className="lt-bar">
         <span><span className="dot" />cardartpicker · load-test</span>
-        <span>open · no auth · <a href="/old">legacy version →</a></span>
+        <span>open · no auth</span>
       </div>
       <div style={{ padding: "1.5rem" }}>
         <CardArtPicker initialList={SAMPLE} apiBase="/api/cardartpicker" />
