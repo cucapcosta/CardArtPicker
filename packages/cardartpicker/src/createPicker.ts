@@ -28,7 +28,9 @@ export function createPicker(config: PickerConfig): Picker {
     ...config,
   }
   const logger = config.logger ?? defaultLogger
-  const cache: CacheAdapter = config.cacheBackend ?? createMemoryCache<SourceResult[]>({ defaultTtlSeconds: resolved.cacheTTL })
+  const cache: CacheAdapter = config.cacheBackend ?? createMemoryCache<SourceResult>({ defaultTtlSeconds: resolved.cacheTTL })
+
+  const NEGATIVE_TTL_SECONDS = 30
 
   async function runSource(src: Source, id: CardIdentifier, pageOpts: SourcePageOptions): Promise<SourceResult> {
     try {
@@ -43,28 +45,42 @@ export function createPicker(config: PickerConfig): Picker {
     }
   }
 
-  const inflight = new Map<string, Promise<SourceResult[]>>()
+  const fullKey = (src: string, id: CardIdentifier) => `search:${src}:${id.type}:${id.name.toLowerCase()}`
+  const pageKey = (src: string, id: CardIdentifier, offset: number, limit: number) =>
+    `${fullKey(src, id)}:${offset}:${limit}`
 
-  async function searchCard(id: CardIdentifier, opts: SourcePageOptions = {}): Promise<SourceResult[]> {
-    const offset = Math.max(0, opts.offset ?? 0)
-    const limit = Math.max(1, opts.limit ?? resolved.optionsPageSize)
-    const key = `search:${id.type}:${id.name.toLowerCase()}:${offset}:${limit}`
-    const cached = await cache.get<SourceResult[]>(key)
+  const inflight = new Map<string, Promise<SourceResult>>()
+
+  async function getSourcePage(src: Source, id: CardIdentifier, offset: number, limit: number): Promise<SourceResult> {
+    const full = await cache.get<SourceResult>(fullKey(src.name, id))
+    if (full?.ok) {
+      const slice = full.options.slice(offset, offset + limit)
+      return { ok: true, source: src.name, options: slice, total: full.total, hasMore: offset + slice.length < full.total }
+    }
+    const key = pageKey(src.name, id, offset, limit)
+    const cached = await cache.get<SourceResult>(key)
     if (cached) return cached
     const existing = inflight.get(key)
     if (existing) return existing
     const promise = (async () => {
       try {
-        const results = await Promise.all(config.sources.map(s => runSource(s, id, { offset, limit })))
-        const allOk = results.every(r => r.ok)
-        if (allOk) await cache.set(key, results, resolved.cacheTTL)
-        return results
+        const result = await runSource(src, id, { offset, limit })
+        if (!result.ok) await cache.set(key, result, NEGATIVE_TTL_SECONDS)
+        else if (offset === 0 && !result.hasMore) await cache.set(fullKey(src.name, id), result, resolved.cacheTTL)
+        else await cache.set(key, result, resolved.cacheTTL)
+        return result
       } finally {
         inflight.delete(key)
       }
     })()
     inflight.set(key, promise)
     return promise
+  }
+
+  async function searchCard(id: CardIdentifier, opts: SourcePageOptions = {}): Promise<SourceResult[]> {
+    const offset = Math.max(0, opts.offset ?? 0)
+    const limit = Math.max(1, opts.limit ?? resolved.optionsPageSize)
+    return Promise.all(config.sources.map(s => getSourcePage(s, id, offset, limit)))
   }
 
   async function getDefaultPrint(name: string, type: CardType = "card"): Promise<CardOption | null> {

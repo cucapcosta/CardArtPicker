@@ -72,4 +72,46 @@ describe("createPicker", () => {
     const picker = createPicker({ sources: [a] })
     expect(await picker.getDefaultPrint("Sol Ring")).toBeNull()
   })
+
+  it("caches per source: healthy source is not re-queried when another source fails", async () => {
+    const bad = makeSource("Bad", new Error("boom"))
+    const good = makeSource("Good", [opt("1", "Good")])
+    const picker = createPicker({ sources: [bad, good] })
+    await picker.searchCard({ name: "Sol Ring", type: "card" })
+    await picker.searchCard({ name: "Sol Ring", type: "card" })
+    expect(good.getOptions).toHaveBeenCalledTimes(1)
+  })
+
+  it("negative-caches failures: failing source not re-queried within 30s", async () => {
+    const bad = makeSource("Bad", new Error("boom"))
+    const picker = createPicker({ sources: [bad] })
+    await picker.searchCard({ name: "Sol Ring", type: "card" })
+    await picker.searchCard({ name: "Sol Ring", type: "card" })
+    expect(bad.getOptions).toHaveBeenCalledTimes(1)
+  })
+
+  it("negative cache expires after 30s", async () => {
+    vi.useFakeTimers()
+    try {
+      const bad = makeSource("Bad", new Error("boom"))
+      const picker = createPicker({ sources: [bad] })
+      await picker.searchCard({ name: "Sol Ring", type: "card" })
+      vi.setSystemTime(Date.now() + 31_000)
+      await picker.searchCard({ name: "Sol Ring", type: "card" })
+      expect(bad.getOptions).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("serves any page shape from a cached complete result set", async () => {
+    const options = [opt("1", "A"), opt("2", "A"), opt("3", "A")]
+    const s = makeSource("A", options)
+    const picker = createPicker({ sources: [s] })
+    await picker.searchCard({ name: "Sol Ring", type: "card" })
+    const page = await picker.searchCard({ name: "Sol Ring", type: "card" }, { offset: 1, limit: 1 })
+    expect(s.getOptions).toHaveBeenCalledTimes(1)
+    expect(page[0].ok && page[0].options[0]?.id).toBe("A:2")
+    expect(page[0].ok && page[0].hasMore).toBe(true)
+  })
 })
