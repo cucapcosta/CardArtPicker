@@ -53,7 +53,8 @@ export function createPicker(config: PickerConfig): Picker {
 
   async function getSourcePage(src: Source, id: CardIdentifier, offset: number, limit: number): Promise<SourceResult> {
     const full = await cache.get<SourceResult>(fullKey(src.name, id))
-    if (full?.ok) {
+    if (full) {
+      if (!full.ok) return full
       const slice = full.options.slice(offset, offset + limit)
       return { ok: true, source: src.name, options: slice, total: full.total, hasMore: offset + slice.length < full.total }
     }
@@ -65,7 +66,7 @@ export function createPicker(config: PickerConfig): Picker {
     const promise = (async () => {
       try {
         const result = await runSource(src, id, { offset, limit })
-        if (!result.ok) await cache.set(key, result, NEGATIVE_TTL_SECONDS)
+        if (!result.ok) await cache.set(fullKey(src.name, id), result, NEGATIVE_TTL_SECONDS)
         else if (offset === 0 && !result.hasMore) await cache.set(fullKey(src.name, id), result, resolved.cacheTTL)
         else await cache.set(key, result, resolved.cacheTTL)
         return result

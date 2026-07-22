@@ -114,4 +114,12 @@ describe("createPicker", () => {
     expect(page[0].ok && page[0].options[0]?.id).toBe("A:2")
     expect(page[0].ok && page[0].hasMore).toBe(true)
   })
+
+  it("negative cache covers all page shapes for the same card", async () => {
+    const bad = makeSource("Bad", new Error("boom"))
+    const picker = createPicker({ sources: [bad] })
+    await picker.searchCard({ name: "Sol Ring", type: "card" })
+    await picker.searchCard({ name: "Sol Ring", type: "card" }, { offset: 0, limit: 1 })
+    expect(bad.getOptions).toHaveBeenCalledTimes(1)
+  })
 })
