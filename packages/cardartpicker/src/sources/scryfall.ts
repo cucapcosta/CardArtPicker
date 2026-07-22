@@ -68,10 +68,10 @@ async function fetchScryfallOnce(id: CardIdentifier): Promise<CardOption[]> {
   return mapped
 }
 
-async function fetchScryfall(id: CardIdentifier): Promise<CardOption[]> {
+async function withScryfallRetry<T>(fn: () => Promise<T>): Promise<T> {
   return withRetry(async () => {
     try {
-      return await fetchScryfallOnce(id)
+      return await fn()
     } catch (e) {
       if (e instanceof ScryfallError && e.retryAfterMs) {
         await new Promise(r => setTimeout(r, e.retryAfterMs))
@@ -86,6 +86,10 @@ async function fetchScryfall(id: CardIdentifier): Promise<CardOption[]> {
       return e.status === 429 || e.status >= 500
     },
   })
+}
+
+async function fetchScryfall(id: CardIdentifier): Promise<CardOption[]> {
+  return withScryfallRetry(() => fetchScryfallOnce(id))
 }
 
 type CacheEntry = { value: CardOption[]; expiresAt: number }
@@ -150,23 +154,7 @@ async function fetchCollectionOnce(names: string[]): Promise<ScryfallCard[]> {
 }
 
 async function fetchCollection(names: string[]): Promise<ScryfallCard[]> {
-  return withRetry(async () => {
-    try {
-      return await fetchCollectionOnce(names)
-    } catch (e) {
-      if (e instanceof ScryfallError && e.retryAfterMs) {
-        await new Promise(r => setTimeout(r, e.retryAfterMs))
-      }
-      throw e
-    }
-  }, {
-    attempts: 4,
-    baseDelayMs: 250,
-    shouldRetry: e => {
-      if (!(e instanceof ScryfallError)) return true
-      return e.status === 429 || e.status >= 500
-    },
-  })
+  return withScryfallRetry(() => fetchCollectionOnce(names))
 }
 
 function matchesRequestedName(requested: string, card: ScryfallCard): boolean {
