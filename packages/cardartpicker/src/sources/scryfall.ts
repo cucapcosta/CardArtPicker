@@ -182,7 +182,7 @@ export const scryfall: Source = defineSource({
       chunks.push(batchable.slice(i, i + COLLECTION_CHUNK))
     }
     const chunkResults = await Promise.all(
-      chunks.map(chunk => scryfallLimit(() => fetchCollection(chunk.map(c => c.name))))
+      chunks.map(chunk => scryfallLimit(() => fetchCollection(chunk.map(c => c.name)).catch(() => [])))
     )
     chunks.forEach((chunk, i) => {
       const data = chunkResults[i] ?? []
@@ -193,7 +193,7 @@ export const scryfall: Source = defineSource({
     })
 
     await Promise.all(searched.map(async id => {
-      const all = await getFullList(id)
+      const all = await getFullList(id).catch(() => [])
       const first = all[0]
       if (first) hits.set(`${id.type}:${id.name.toLowerCase()}`, first)
     }))

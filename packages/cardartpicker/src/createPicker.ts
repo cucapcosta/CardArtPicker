@@ -1,3 +1,4 @@
+import pLimit from "p-limit"
 import type {
   CacheAdapter, CardIdentifier, CardOption, CardType, Logger, ParsedList,
   Picker, PickerConfig, Selection, Source, SourcePageOptions, SourceResult,
@@ -28,7 +29,7 @@ export function createPicker(config: PickerConfig): Picker {
     ...config,
   }
   const logger = config.logger ?? defaultLogger
-  const cache: CacheAdapter = config.cacheBackend ?? createMemoryCache<SourceResult>({ defaultTtlSeconds: resolved.cacheTTL })
+  const cache: CacheAdapter = config.cacheBackend ?? createMemoryCache<unknown>({ defaultTtlSeconds: resolved.cacheTTL })
 
   const NEGATIVE_TTL_SECONDS = 30
 
@@ -102,7 +103,8 @@ export function createPicker(config: PickerConfig): Picker {
       let hits: Map<string, CardOption>
       if (src.getDefaults) {
         try {
-          hits = await withTimeout(src.getDefaults(batch), resolved.sourceTimeoutMs)
+          const batchTimeout = resolved.sourceTimeoutMs * Math.max(1, Math.ceil(batch.length / 75))
+          hits = await withTimeout(src.getDefaults(batch), batchTimeout)
         } catch (e) {
           const err = e as { message?: string }
           logger("warn", "source.defaults.failure", { source: src.name, message: err.message ?? String(e) })
@@ -110,11 +112,12 @@ export function createPicker(config: PickerConfig): Picker {
         }
       } else {
         hits = new Map()
-        await Promise.all(batch.map(async id => {
+        const limit = pLimit(6)
+        await Promise.all(batch.map(id => limit(async () => {
           const r = await getSourcePage(src, id, 0, 1)
           const first = r.ok ? r.options[0] : undefined
           if (first) hits.set(defaultKey(id), first)
-        }))
+        })))
       }
       for (const [k, hit] of hits) {
         if (!pending.has(k)) continue

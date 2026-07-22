@@ -139,4 +139,36 @@ describe("scryfall getDefaults", () => {
     const hits = await scryfall.getDefaults!([{ name: "Arlinn, the Pack's Hope gd", type: "card" }])
     expect(hits.get("card:arlinn, the pack's hope gd")).toBeDefined()
   })
+
+  it("isolates a failing chunk so the other chunk's hits still resolve", async () => {
+    server.use(http.post("https://api.scryfall.com/cards/collection", async ({ request }) => {
+      const body = (await request.json()) as { identifiers: Array<{ name: string }> }
+      collectionCalls.push(body)
+      if (body.identifiers.some(i => i.name.startsWith("gd-fail"))) {
+        return new HttpResponse(null, { status: 404 })
+      }
+      const data = body.identifiers.map((i, idx) => ({
+        id: `coll-${i.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${idx}`,
+        name: i.name,
+        set: "c21",
+        collector_number: String(idx),
+        image_uris: { png: `https://cards.scryfall.io/png/${idx}.png`, small: `https://cards.scryfall.io/small/${idx}.png` },
+      }))
+      return HttpResponse.json({ data, not_found: [] })
+    }))
+
+    const okIds = Array.from({ length: 75 }, (_, i) => ({ name: `gd-ok-${i}`, type: "card" as const }))
+    const failIds = [{ name: "gd-fail-0", type: "card" as const }]
+    const ids = [...okIds, ...failIds]
+
+    const hits = await scryfall.getDefaults!(ids)
+
+    expect(collectionCalls).toHaveLength(2)
+    for (const id of okIds) {
+      expect(hits.has(`card:${id.name.toLowerCase()}`)).toBe(true)
+    }
+    for (const id of failIds) {
+      expect(hits.has(`card:${id.name.toLowerCase()}`)).toBe(false)
+    }
+  })
 })

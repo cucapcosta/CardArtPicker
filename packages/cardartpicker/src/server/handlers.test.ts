@@ -112,4 +112,18 @@ describe("createHandlers", () => {
     const o = await GET(req("/api/cardartpicker/options?name=Sol+Ring&type=card"))
     expect(o.headers.get("Cache-Control")).toBe("public, s-maxage=3600, stale-while-revalidate=86400")
   })
+
+  it("GET /options omits Cache-Control when a source result is partial-failure", async () => {
+    const failing: Source = {
+      name: "B",
+      getOptions: vi.fn(async () => { throw new Error("boom") }),
+    }
+    const p = createPicker({ sources: [makeSource("A", [opt("x")]), failing] })
+    const { GET: g } = createHandlers(p)
+    const r = await g(req("/api/cardartpicker/options?name=Sol+Ring&type=card"))
+    const body = await r.json() as Array<{ ok: boolean }>
+    expect(r.status).toBe(200)
+    expect(body.some(x => !x.ok)).toBe(true)
+    expect(r.headers.get("Cache-Control")).toBeNull()
+  })
 })

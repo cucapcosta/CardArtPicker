@@ -38,7 +38,8 @@ export function createGetHandler(
       const offset = offsetRaw !== null && Number.isFinite(Number(offsetRaw)) ? Math.max(0, Number(offsetRaw)) : 0
       const limit = limitRaw !== null && Number.isFinite(Number(limitRaw)) ? Math.max(1, Math.min(500, Number(limitRaw))) : undefined
       const results = await picker.searchCard({ name, type }, limit !== undefined ? { offset, limit } : { offset })
-      return new Response(JSON.stringify(results), { status: 200, headers: cacheHeaders })
+      const headers = results.every(r => r.ok) ? cacheHeaders : jsonHeaders
+      return new Response(JSON.stringify(results), { status: 200, headers })
     }
     return new Response(JSON.stringify({ error: "not-found" }), { status: 404, headers: jsonHeaders })
   }
