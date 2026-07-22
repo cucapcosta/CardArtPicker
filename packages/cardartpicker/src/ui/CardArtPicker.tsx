@@ -140,9 +140,9 @@ function Inner({ initialList, slots, onSelectionChange, onError }: Omit<CardArtP
   )
 }
 
-export function CardArtPicker({ apiBase = "/api/cardartpicker", className, ...rest }: CardArtPickerProps) {
+export function CardArtPicker({ apiBase = "/api/cardartpicker", className, eagerLoad, ...rest }: CardArtPickerProps) {
   return (
-    <CardPickerProvider apiBase={apiBase}>
+    <CardPickerProvider apiBase={apiBase} eagerLoad={eagerLoad ?? false}>
       <div className={className}>
         <Inner {...rest} />
       </div>

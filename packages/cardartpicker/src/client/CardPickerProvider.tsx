@@ -49,7 +49,7 @@ async function runWithLimit<T>(items: T[], limit: number, fn: (t: T) => Promise<
   await Promise.all(workers)
 }
 
-export function CardPickerProvider({ children, apiBase = "/api/cardartpicker" }: { children: ReactNode; apiBase?: string }) {
+export function CardPickerProvider({ children, apiBase = "/api/cardartpicker", eagerLoad = false }: { children: ReactNode; apiBase?: string; eagerLoad?: boolean }) {
   const [list, setList] = useState<ListState>({ mainboard: [], tokens: [] })
   const [errors, setErrors] = useState<Error[]>([])
   const [loading, setLoading] = useState(false)
@@ -164,23 +164,38 @@ export function CardPickerProvider({ children, apiBase = "/api/cardartpicker" }:
 
       const allSlots = [...mainboard, ...tokens]
       kicked = allSlots
-      await Promise.all(allSlots.map(async s => {
-        try {
-          const params = new URLSearchParams({ name: s.cardName, type: s.identifier.type })
-          const raw = await getJson<CardOption>(`${apiBase}/default?${params}`)
-          const opt = proxyOption(raw)
-          updateSlot(s.id, { options: [opt], selectedOptionId: opt.id, status: "ready", totalOptions: 1, hasMoreOptions: true })
-        } catch {
-          updateSlot(s.id, { status: "not-found" })
-        }
-      }))
+      const unique = new Map<string, { name: string; type: CardType }>()
+      for (const s of allSlots) {
+        const k = nameKey(s.identifier.type, s.cardName)
+        if (!unique.has(k)) unique.set(k, { name: s.cardName, type: s.identifier.type })
+      }
+      if (unique.size > 0) {
+        const defaults = await getJson<Record<string, CardOption | null>>(`${apiBase}/defaults`, {
+          method: "POST",
+          body: JSON.stringify({ cards: [...unique.values()] }),
+          headers: { "Content-Type": "application/json" },
+        })
+        setList(prev => {
+          const mapper = (s: Slot): Slot => {
+            const raw = defaults[nameKey(s.identifier.type, s.cardName)]
+            if (!raw) return { ...s, status: "not-found" }
+            const opt = proxyOption(raw)
+            return { ...s, options: [opt], selectedOptionId: opt.id, status: "ready", totalOptions: 1, hasMoreOptions: true }
+          }
+          return { mainboard: prev.mainboard.map(mapper), tokens: prev.tokens.map(mapper) }
+        })
+      }
     } catch (e) {
       setErrors(es => [...es, e as Error])
+      setList(prev => {
+        const mapper = (s: Slot): Slot => s.status === "loading" ? { ...s, status: "not-found" } : s
+        return { mainboard: prev.mainboard.map(mapper), tokens: prev.tokens.map(mapper) }
+      })
     } finally {
       setLoading(false)
     }
 
-    if (kicked.length === 0) return
+    if (!eagerLoad || kicked.length === 0) return
     const groups = new Map<string, { type: CardType; name: string }>()
     for (const s of kicked) {
       const k = nameKey(s.identifier.type, s.cardName)
@@ -192,7 +207,7 @@ export function CardPickerProvider({ children, apiBase = "/api/cardartpicker" }:
       try { await expandPage(g.type, g.name, 0) } catch (e) { setErrors(es => [...es, e as Error]) }
       setOptionsProgress(p => p ? { loaded: p.loaded + 1, total: p.total } : p)
     }).then(() => setOptionsProgress(null))
-  }, [apiBase, updateSlot, expandPage, proxyOption])
+  }, [apiBase, expandPage, proxyOption, eagerLoad])
 
   const cycleOption = useCallback(async (slotId: string, dir: "next" | "prev") => {
     const ref = stateRef.current

@@ -19,6 +19,14 @@ const server = setupServer(
     if (u.searchParams.get("name") === "Sol Ring") return HttpResponse.json(defaultOption)
     return HttpResponse.json({ error: "not-found" }, { status: 404 })
   }),
+  http.post("http://localhost/api/cardartpicker/defaults", async ({ request }) => {
+    const body = (await request.json()) as { cards: Array<{ name: string; type: string }> }
+    const out: Record<string, unknown> = {}
+    for (const c of body.cards) {
+      out[`${c.type}:${c.name.toLowerCase()}`] = c.name === "Sol Ring" ? defaultOption : null
+    }
+    return HttpResponse.json(out)
+  }),
   http.get("http://localhost/api/cardartpicker/options", () => HttpResponse.json(moreOptions)),
   http.post("http://localhost/api/cardartpicker/parse", () =>
     HttpResponse.json({ mainboard: [{ quantity: 1, name: "Sol Ring", type: "card" }], tokens: [], warnings: [] })),
@@ -42,8 +50,29 @@ describe("useCardPicker", () => {
     expect(slot.selectedOptionId).toBe("scryfall:abc")
   })
 
-  it("background-loads all options after defaults", async () => {
+  it("does not fetch options until the user interacts", async () => {
+    let optionsRequested = 0
+    server.use(http.get("http://localhost/api/cardartpicker/options", () => {
+      optionsRequested++
+      return HttpResponse.json(moreOptions)
+    }))
     const { result } = renderHook(() => useCardPicker(), { wrapper: wrap })
+    await act(() => result.current.parseList("1 Sol Ring"))
+    await waitFor(() => expect(result.current.list.mainboard).toHaveLength(1))
+    const slot = result.current.list.mainboard[0]!
+    await waitFor(() => expect(result.current.getSlot(slot.id)!.status).toBe("ready"))
+    expect(optionsRequested).toBe(0)
+    expect(result.current.getSlot(slot.id)!.options).toHaveLength(1)
+    await act(() => result.current.cycleOption(slot.id, "next"))
+    expect(optionsRequested).toBe(1)
+    await waitFor(() => expect(result.current.getSlot(slot.id)!.options.length).toBeGreaterThan(1))
+  })
+
+  it("eagerLoad restores background option loading", async () => {
+    const eagerWrap = ({ children }: { children: ReactNode }) => (
+      <CardPickerProvider apiBase="/api/cardartpicker" eagerLoad>{children}</CardPickerProvider>
+    )
+    const { result } = renderHook(() => useCardPicker(), { wrapper: eagerWrap })
     await act(() => result.current.parseList("1 Sol Ring"))
     await waitFor(() => expect(result.current.list.mainboard).toHaveLength(1))
     const slot = result.current.list.mainboard[0]!
@@ -56,9 +85,9 @@ describe("useCardPicker", () => {
     await act(() => result.current.parseList("1 Sol Ring"))
     await waitFor(() => expect(result.current.list.mainboard).toHaveLength(1))
     const slot = result.current.list.mainboard[0]!
-    await waitFor(() => expect(result.current.getSlot(slot.id)!.options.length).toBeGreaterThan(1))
     const before = result.current.getSlot(slot.id)!.selectedOptionId
     await act(() => result.current.cycleOption(slot.id, "next"))
+    await waitFor(() => expect(result.current.getSlot(slot.id)!.options.length).toBeGreaterThan(1))
     expect(result.current.getSlot(slot.id)!.selectedOptionId).not.toBe(before)
   })
 
@@ -82,6 +111,25 @@ describe("useCardPicker", () => {
     await act(() => result.current.flipSlot(slot.id))
     expect(result.current.getSlot(slot.id)!.flipped).toBe(true)
     expect(result.current.selections[slot.id]).toBe(before)
+  })
+
+  it("sends one batched defaults request for duplicate copies", async () => {
+    let defaultsRequests = 0
+    server.use(http.post("http://localhost/api/cardartpicker/defaults", async ({ request }) => {
+      defaultsRequests++
+      const body = (await request.json()) as { cards: Array<{ name: string; type: string }> }
+      expect(body.cards).toHaveLength(1)
+      return HttpResponse.json({ "card:sol ring": defaultOption })
+    }))
+    server.use(http.post("http://localhost/api/cardartpicker/parse", () =>
+      HttpResponse.json({ mainboard: [{ quantity: 3, name: "Sol Ring", type: "card" }], tokens: [], warnings: [] })))
+    const { result } = renderHook(() => useCardPicker(), { wrapper: wrap })
+    await act(() => result.current.parseList("3 Sol Ring"))
+    await waitFor(() => expect(result.current.list.mainboard).toHaveLength(3))
+    expect(defaultsRequests).toBe(1)
+    for (const slot of result.current.list.mainboard) {
+      expect(slot.selectedOptionId).toBe("scryfall:abc")
+    }
   })
 
   it("expands quantity into multiple slots", async () => {
