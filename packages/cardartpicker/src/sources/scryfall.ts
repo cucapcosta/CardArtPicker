@@ -130,6 +130,51 @@ async function getFullList(id: CardIdentifier): Promise<CardOption[]> {
   return promise
 }
 
+const COLLECTION_CHUNK = 75
+
+type CollectionResponse = { data?: ScryfallCard[]; not_found?: unknown[] }
+
+async function fetchCollectionOnce(names: string[]): Promise<ScryfallCard[]> {
+  const res = await fetch("https://api.scryfall.com/cards/collection", {
+    method: "POST",
+    headers: { Accept: "application/json", "Content-Type": "application/json", "User-Agent": UA },
+    body: JSON.stringify({ identifiers: names.map(name => ({ name })) }),
+  })
+  if (!res.ok) {
+    const ra = Number(res.headers.get("Retry-After"))
+    const retryAfterMs = Number.isFinite(ra) && ra > 0 ? ra * 1000 : undefined
+    throw new ScryfallError(res.status, `Scryfall collection ${res.status}: ${await res.text()}`, retryAfterMs)
+  }
+  const body = (await res.json()) as CollectionResponse
+  return body.data ?? []
+}
+
+async function fetchCollection(names: string[]): Promise<ScryfallCard[]> {
+  return withRetry(async () => {
+    try {
+      return await fetchCollectionOnce(names)
+    } catch (e) {
+      if (e instanceof ScryfallError && e.retryAfterMs) {
+        await new Promise(r => setTimeout(r, e.retryAfterMs))
+      }
+      throw e
+    }
+  }, {
+    attempts: 4,
+    baseDelayMs: 250,
+    shouldRetry: e => {
+      if (!(e instanceof ScryfallError)) return true
+      return e.status === 429 || e.status >= 500
+    },
+  })
+}
+
+function matchesRequestedName(requested: string, card: ScryfallCard): boolean {
+  const want = requested.toLowerCase()
+  const got = card.name.toLowerCase()
+  return got === want || got.split(" // ")[0] === want
+}
+
 export const scryfall: Source = defineSource({
   name: "Scryfall",
   async getOptions(id: CardIdentifier, opts: SourcePageOptions = {}): Promise<SourcePage> {
@@ -138,5 +183,33 @@ export const scryfall: Source = defineSource({
     const limit = Math.max(1, opts.limit ?? all.length)
     const slice = all.slice(offset, offset + limit)
     return { options: slice, total: all.length, hasMore: offset + slice.length < all.length }
+  },
+  async getDefaults(ids: CardIdentifier[]): Promise<Map<string, CardOption>> {
+    const hits = new Map<string, CardOption>()
+    const batchable = ids.filter(id => id.type === "card" && !id.setHint)
+    const searched = ids.filter(id => id.type !== "card" || id.setHint)
+
+    const chunks: CardIdentifier[][] = []
+    for (let i = 0; i < batchable.length; i += COLLECTION_CHUNK) {
+      chunks.push(batchable.slice(i, i + COLLECTION_CHUNK))
+    }
+    const chunkResults = await Promise.all(
+      chunks.map(chunk => scryfallLimit(() => fetchCollection(chunk.map(c => c.name))))
+    )
+    chunks.forEach((chunk, i) => {
+      const data = chunkResults[i] ?? []
+      for (const id of chunk) {
+        const card = data.find(c => matchesRequestedName(id.name, c))
+        if (card) hits.set(`${id.type}:${id.name.toLowerCase()}`, mapCard(card))
+      }
+    })
+
+    await Promise.all(searched.map(async id => {
+      const all = await getFullList(id)
+      const first = all[0]
+      if (first) hits.set(`${id.type}:${id.name.toLowerCase()}`, first)
+    }))
+
+    return hits
   },
 })

@@ -7,7 +7,21 @@ import { scryfall } from "../sources/scryfall.js"
 import solRing from "../../test/fixtures/scryfall-sol-ring.json" with { type: "json" }
 
 const server = setupServer(
-  http.get("https://api.scryfall.com/cards/search", () => HttpResponse.json(solRing))
+  http.get("https://api.scryfall.com/cards/search", () => HttpResponse.json(solRing)),
+  http.post("https://api.scryfall.com/cards/collection", async ({ request }) => {
+    const body = (await request.json()) as { identifiers: Array<{ name: string }> }
+    const data = body.identifiers
+      .filter(i => !i.name.toLowerCase().startsWith("missing"))
+      .map((i, idx) => ({
+        id: `coll-${i.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${idx}`,
+        name: i.name,
+        set: "c21",
+        collector_number: String(idx),
+        image_uris: { png: `https://cards.scryfall.io/png/${idx}.png`, small: `https://cards.scryfall.io/small/${idx}.png` },
+      }))
+    const not_found = body.identifiers.filter(i => i.name.toLowerCase().startsWith("missing"))
+    return HttpResponse.json({ data, not_found })
+  })
 )
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
 afterEach(() => server.resetHandlers())
