@@ -1,11 +1,11 @@
-# load-test
+# test
 
-Minimal Next.js app for performance/load-testing `cardartpicker`. Single Railway service: picker UI + admin (reindex/upload) + index file server.
+Minimal Next.js app for showing off the latest `cardartpicker` components. Single Railway service: picker UI + admin (reindex/upload) + index file server.
 
 ## Local
 
 ```sh
-pnpm --filter load-test dev
+pnpm --filter test dev
 # → http://localhost:3000
 # → http://localhost:3000/admin
 ```
@@ -44,12 +44,11 @@ Reindex must run from a clean IP (Cloudflare 1015 ban risk). If Railway's egress
 
 ## Docker
 
-```sh
-docker build -t cap-loadtest .
-docker run -p 3000:3000 -v cap-data:/data -e REINDEX_SECRET=changeme cap-loadtest
+The Dockerfile always builds the workspace `cardartpicker` package from source — there is no npm-install mode.
 
-# build against published npm package instead
-docker build --build-arg CAP_SOURCE=npm --build-arg CAP_VERSION=latest -t cap-loadtest:npm .
+```sh
+docker build -t cap-test .
+docker run -p 3000:3000 -v cap-data:/data -e REINDEX_SECRET=changeme cap-test
 ```
 
 ## Railway (single service)
@@ -58,7 +57,6 @@ docker build --build-arg CAP_SOURCE=npm --build-arg CAP_VERSION=latest -t cap-lo
 2. **Add a Volume**, mount path `/data` (any size; ~50MB usage).
 3. **Variables**:
    - `REINDEX_SECRET=<long-random-string>` (required for admin)
-   - `CAP_SOURCE=workspace` (default) or `CAP_SOURCE=npm` + `CAP_VERSION=0.1.0`
 4. Open `/admin`, paste the secret, click **Reindex** — or upload a locally-built JSON if Railway's IP gets banned.
 
 The package consumes the index at `https://<your-app>.up.railway.app/api/index-json`.

@@ -19,4 +19,4 @@ scripts/.mpcfill-scrape-progress.json
 scripts/.mpcfill-meta.json
 scripts/.mpcfill-scrape.log
 scripts/.mpcfill-scrape.pid
-examples/load-test/public/mpcfill-index.json
+examples/test/public/mpcfill-index.json
