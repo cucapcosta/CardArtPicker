@@ -37,6 +37,8 @@ export type SourcePage = {
 export type Source = {
   name: string
   getOptions(id: CardIdentifier, opts?: SourcePageOptions): Promise<SourcePage>
+  /** Optional batch default-print lookup. Key: `${type}:${name.toLowerCase()}`. Missing key = no hit. */
+  getDefaults?(ids: CardIdentifier[]): Promise<Map<string, CardOption>>
   getImage?(optionId: string): Promise<ArrayBuffer>
 }
 
@@ -107,6 +109,8 @@ export type Picker = {
   readonly config: Required<Pick<PickerConfig, "cacheTTL" | "sourceTimeoutMs" | "parserStrict" | "optionsPageSize">> & PickerConfig
   searchCard(id: CardIdentifier, opts?: SourcePageOptions): Promise<SourceResult[]>
   getDefaultPrint(name: string, type?: CardType): Promise<CardOption | null>
+  /** Batch default-print lookup. Every requested card is a key in the result; null = not found. */
+  getDefaultPrints(ids: CardIdentifier[]): Promise<Record<string, CardOption | null>>
   buildZip(selections: Selection[]): Promise<Blob>
   parseList(text: string): ParsedList
   /** Drop all cached search results. Call after the underlying index updates. */

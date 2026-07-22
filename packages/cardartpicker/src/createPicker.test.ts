@@ -122,4 +122,81 @@ describe("createPicker", () => {
     await picker.searchCard({ name: "Sol Ring", type: "card" }, { offset: 0, limit: 1 })
     expect(bad.getOptions).toHaveBeenCalledTimes(1)
   })
+
+  it("getDefaultPrint queries sources in order and stops at first hit", async () => {
+    const a = makeSource("A", [opt("1", "A")])
+    const b = makeSource("B", [opt("2", "B")])
+    const picker = createPicker({ sources: [a, b] })
+    const def = await picker.getDefaultPrint("Sol Ring")
+    expect(def?.id).toBe("A:1")
+    expect(b.getOptions).not.toHaveBeenCalled()
+  })
+
+  it("getDefaultPrints resolves a batch, falling through to later sources per card", async () => {
+    const a: Source = {
+      name: "A",
+      getOptions: vi.fn(async (id) => {
+        const hit = id.name === "Sol Ring" ? [opt("1", "A")] : []
+        return { options: hit, total: hit.length, hasMore: false }
+      }),
+    }
+    const b: Source = {
+      name: "B",
+      getOptions: vi.fn(async (id) => {
+        const hit = id.name === "Counterspell" ? [opt("2", "B")] : []
+        return { options: hit, total: hit.length, hasMore: false }
+      }),
+    }
+    const picker = createPicker({ sources: [a, b] })
+    const map = await picker.getDefaultPrints([
+      { name: "Sol Ring", type: "card" },
+      { name: "Counterspell", type: "card" },
+      { name: "Nonexistent", type: "card" },
+    ])
+    expect(map["card:sol ring"]?.id).toBe("A:1")
+    expect(map["card:counterspell"]?.id).toBe("B:2")
+    expect(map["card:nonexistent"]).toBeNull()
+    // B only queried for the two cards A missed
+    expect(b.getOptions).toHaveBeenCalledTimes(2)
+  })
+
+  it("getDefaultPrints uses a source's batch getDefaults when available", async () => {
+    const batched: Source = {
+      name: "Batched",
+      getOptions: vi.fn(async () => ({ options: [], total: 0, hasMore: false })),
+      getDefaults: vi.fn(async (ids) => {
+        const m = new Map<string, CardOption>()
+        for (const id of ids) m.set(`${id.type}:${id.name.toLowerCase()}`, opt(id.name, "Batched"))
+        return m
+      }),
+    }
+    const picker = createPicker({ sources: [batched] })
+    const map = await picker.getDefaultPrints([
+      { name: "Sol Ring", type: "card" },
+      { name: "Counterspell", type: "card" },
+    ])
+    expect(batched.getDefaults).toHaveBeenCalledTimes(1)
+    expect(batched.getOptions).not.toHaveBeenCalled()
+    expect(map["card:sol ring"]?.id).toBe("Batched:Sol Ring")
+  })
+
+  it("getDefaultPrints survives a broken getDefaults and falls through", async () => {
+    const broken: Source = {
+      name: "Broken",
+      getOptions: vi.fn(async () => ({ options: [], total: 0, hasMore: false })),
+      getDefaults: vi.fn(async () => { throw new Error("boom") }),
+    }
+    const b = makeSource("B", [opt("2", "B")])
+    const picker = createPicker({ sources: [broken, b] })
+    const map = await picker.getDefaultPrints([{ name: "Sol Ring", type: "card" }])
+    expect(map["card:sol ring"]?.id).toBe("B:2")
+  })
+
+  it("getDefaultPrints caches resolved defaults", async () => {
+    const a = makeSource("A", [opt("1", "A")])
+    const picker = createPicker({ sources: [a] })
+    await picker.getDefaultPrints([{ name: "Sol Ring", type: "card" }])
+    await picker.getDefaultPrints([{ name: "Sol Ring", type: "card" }])
+    expect(a.getOptions).toHaveBeenCalledTimes(1)
+  })
 })

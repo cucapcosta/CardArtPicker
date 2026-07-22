@@ -84,15 +84,55 @@ export function createPicker(config: PickerConfig): Picker {
     return Promise.all(config.sources.map(s => getSourcePage(s, id, offset, limit)))
   }
 
-  async function getDefaultPrint(name: string, type: CardType = "card"): Promise<CardOption | null> {
-    const results = await searchCard({ name, type }, { offset: 0, limit: 1 })
-    for (const r of results) {
-      if (r.ok && r.options.length > 0) {
-        const first = r.options[0]
-        if (first) return first
+  const defaultKey = (id: CardIdentifier) => `${id.type}:${id.name.toLowerCase()}`
+
+  async function getDefaultPrints(ids: CardIdentifier[]): Promise<Record<string, CardOption | null>> {
+    const result: Record<string, CardOption | null> = {}
+    const pending = new Map<string, CardIdentifier>()
+    for (const id of ids) {
+      const k = defaultKey(id)
+      if (k in result || pending.has(k)) continue
+      const cached = await cache.get<CardOption | null>(`default:${k}`)
+      if (cached !== undefined) result[k] = cached
+      else pending.set(k, id)
+    }
+    for (const src of config.sources) {
+      if (pending.size === 0) break
+      const batch = [...pending.values()]
+      let hits: Map<string, CardOption>
+      if (src.getDefaults) {
+        try {
+          hits = await withTimeout(src.getDefaults(batch), resolved.sourceTimeoutMs)
+        } catch (e) {
+          const err = e as { message?: string }
+          logger("warn", "source.defaults.failure", { source: src.name, message: err.message ?? String(e) })
+          hits = new Map()
+        }
+      } else {
+        hits = new Map()
+        await Promise.all(batch.map(async id => {
+          const r = await getSourcePage(src, id, 0, 1)
+          const first = r.ok ? r.options[0] : undefined
+          if (first) hits.set(defaultKey(id), first)
+        }))
+      }
+      for (const [k, hit] of hits) {
+        if (!pending.has(k)) continue
+        result[k] = hit
+        pending.delete(k)
+        await cache.set(`default:${k}`, hit, resolved.cacheTTL)
       }
     }
-    return null
+    for (const k of pending.keys()) {
+      result[k] = null
+      await cache.set(`default:${k}`, null, NEGATIVE_TTL_SECONDS)
+    }
+    return result
+  }
+
+  async function getDefaultPrint(name: string, type: CardType = "card"): Promise<CardOption | null> {
+    const map = await getDefaultPrints([{ name, type }])
+    return map[`${type}:${name.toLowerCase()}`] ?? null
   }
 
   function parseList(text: string): ParsedList {
@@ -108,5 +148,5 @@ export function createPicker(config: PickerConfig): Picker {
     if (cache.clear) await cache.clear()
   }
 
-  return { config: resolved, searchCard, getDefaultPrint, parseList, buildZip, clearCache }
+  return { config: resolved, searchCard, getDefaultPrint, getDefaultPrints, parseList, buildZip, clearCache }
 }
