@@ -61,4 +61,55 @@ describe("createHandlers", () => {
     }))
     expect(r.status).toBe(400)
   })
+
+  it("POST /defaults resolves a batch of cards", async () => {
+    const selective: Source = {
+      name: "A",
+      getOptions: vi.fn(async (id) => {
+        const options = id.name === "Sol Ring" ? [opt("x")] : []
+        return { options, total: options.length, hasMore: false }
+      }),
+    }
+    const p = createPicker({ sources: [selective] })
+    const { POST: post } = createHandlers(p)
+    const r = await post(req("/api/cardartpicker/defaults", {
+      method: "POST",
+      body: JSON.stringify({ cards: [{ name: "Sol Ring", type: "card" }, { name: "Nope", type: "card" }] }),
+      headers: { "Content-Type": "application/json" },
+    }))
+    const body = await r.json() as Record<string, { id: string } | null>
+    expect(r.status).toBe(200)
+    expect(body["card:sol ring"]?.id).toBe("A:x")
+    expect(body["card:nope"]).toBeNull()
+  })
+
+  it("POST /defaults defaults type to card", async () => {
+    const r = await POST(req("/api/cardartpicker/defaults", {
+      method: "POST",
+      body: JSON.stringify({ cards: [{ name: "Sol Ring" }] }),
+      headers: { "Content-Type": "application/json" },
+    }))
+    const body = await r.json() as Record<string, { id: string } | null>
+    expect(body["card:sol ring"]?.id).toBe("A:x")
+  })
+
+  it("POST /defaults rejects invalid bodies", async () => {
+    const empty = await POST(req("/api/cardartpicker/defaults", {
+      method: "POST", body: JSON.stringify({ cards: [] }),
+      headers: { "Content-Type": "application/json" },
+    }))
+    expect(empty.status).toBe(400)
+    const notJson = await POST(req("/api/cardartpicker/defaults", {
+      method: "POST", body: "nope",
+      headers: { "Content-Type": "application/json" },
+    }))
+    expect(notJson.status).toBe(400)
+  })
+
+  it("cacheable GET responses carry Cache-Control", async () => {
+    const d = await GET(req("/api/cardartpicker/default?name=Sol+Ring&type=card"))
+    expect(d.headers.get("Cache-Control")).toBe("public, s-maxage=3600, stale-while-revalidate=86400")
+    const o = await GET(req("/api/cardartpicker/options?name=Sol+Ring&type=card"))
+    expect(o.headers.get("Cache-Control")).toBe("public, s-maxage=3600, stale-while-revalidate=86400")
+  })
 })

@@ -10,6 +10,7 @@ function getPathSegments(url: string): string[] {
 }
 
 const jsonHeaders = { "Content-Type": "application/json" }
+const cacheHeaders = { ...jsonHeaders, "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=86400" }
 
 export function createGetHandler(
   picker: Picker,
@@ -28,7 +29,7 @@ export function createGetHandler(
       if (!name) return new Response(JSON.stringify({ error: "missing name" }), { status: 400, headers: jsonHeaders })
       const opt = await picker.getDefaultPrint(name, type)
       if (!opt) return new Response(JSON.stringify({ error: "not-found" }), { status: 404, headers: jsonHeaders })
-      return new Response(JSON.stringify(opt), { status: 200, headers: jsonHeaders })
+      return new Response(JSON.stringify(opt), { status: 200, headers: cacheHeaders })
     }
     if (route === "options") {
       if (!name) return new Response(JSON.stringify({ error: "missing name" }), { status: 400, headers: jsonHeaders })
@@ -37,13 +38,19 @@ export function createGetHandler(
       const offset = offsetRaw !== null && Number.isFinite(Number(offsetRaw)) ? Math.max(0, Number(offsetRaw)) : 0
       const limit = limitRaw !== null && Number.isFinite(Number(limitRaw)) ? Math.max(1, Math.min(500, Number(limitRaw))) : undefined
       const results = await picker.searchCard({ name, type }, limit !== undefined ? { offset, limit } : { offset })
-      return new Response(JSON.stringify(results), { status: 200, headers: jsonHeaders })
+      return new Response(JSON.stringify(results), { status: 200, headers: cacheHeaders })
     }
     return new Response(JSON.stringify({ error: "not-found" }), { status: 404, headers: jsonHeaders })
   }
 }
 
 const ParseBody = z.object({ text: z.string() })
+const DefaultsBody = z.object({
+  cards: z.array(z.object({
+    name: z.string().min(1),
+    type: z.enum(["card", "token"]).default("card"),
+  })).min(1).max(500),
+})
 
 export function createPostHandler(
   picker: Picker,
@@ -63,6 +70,16 @@ export function createPostHandler(
       if (!parsed.success) return new Response(JSON.stringify({ error: parsed.error.issues }), { status: 400, headers: jsonHeaders })
       const result = picker.parseList(parsed.data.text)
       return new Response(JSON.stringify(result), { status: 200, headers: jsonHeaders })
+    }
+    if (route === "defaults") {
+      let body: unknown
+      try { body = await request.json() } catch {
+        return new Response(JSON.stringify({ error: "invalid json" }), { status: 400, headers: jsonHeaders })
+      }
+      const parsed = DefaultsBody.safeParse(body)
+      if (!parsed.success) return new Response(JSON.stringify({ error: parsed.error.issues }), { status: 400, headers: jsonHeaders })
+      const map = await picker.getDefaultPrints(parsed.data.cards)
+      return new Response(JSON.stringify(map), { status: 200, headers: cacheHeaders })
     }
     if (route === "download") return downloadRoute(request)
     if (route === "upload") return uploadRoute(request)
