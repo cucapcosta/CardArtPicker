@@ -41,9 +41,9 @@ browser                Next.js route handler           upstream sources
    │                          │                              │
    │ POST /defaults           │                              │
    ├─────────────────────────►│ picker.getDefaultPrints(ids) │
-   │  { cards: [...] }        ├─────────────────────────────►│ Scryfall /cards/collection (75/chunk)
+   │  { cards: [...] }        ├─────────────────────────────►│ Scryfall /cards/collection (75/chunk; tokens use /search)
    │◄─────────────────────────┤                              │
-   │  { "card:name": opt|null }│                              │
+   │  { "card:name": opt|null } │                              │
    │                          │                              │
    │ GET /options?name=…      │ picker.searchCard(id)        │
    ├─────────────────────────►├─── all sources in parallel ─►│

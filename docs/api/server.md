@@ -30,7 +30,7 @@ Returns the first option from the first source that has any options for the give
 
 Used by the hook on initial parse to render slots quickly.
 
-**Cache headers:** `Cache-Control: public, s-maxage=3600, stale-while-revalidate=86400`
+**Cache headers (200 only):** `Cache-Control: public, s-maxage=3600, stale-while-revalidate=86400`
 
 ### `POST /defaults`
 
@@ -53,7 +53,7 @@ Response:
 
 ```
 200 → Record<"type:name", CardOption | null>    (JSON)
-400 → { error: "invalid body" } or { error: "too many cards (max 500)" }
+400 → { error: "invalid json" } or { error: <zod issues> }
 ```
 
 ```ts
@@ -66,7 +66,7 @@ Response:
 
 Sources are walked in config order; only cards missed by earlier sources reach later ones. This significantly reduces traffic to slower sources.
 
-**Cache headers:** `Cache-Control: public, s-maxage=3600, stale-while-revalidate=86400`
+**Cache headers (200 only):** `Cache-Control: public, s-maxage=3600, stale-while-revalidate=86400`
 
 ### `GET /options?name=X&type=card|token`
 
@@ -85,7 +85,7 @@ type SourceResult =
 
 Used by the hook lazily when the user cycles arrows or opens the options modal.
 
-**Cache headers:** `Cache-Control: public, s-maxage=3600, stale-while-revalidate=86400`
+**Cache headers (200 only):** `Cache-Control: public, s-maxage=3600, stale-while-revalidate=86400`
 
 ### `POST /parse`
 

@@ -216,7 +216,15 @@ Key format: `` `${type}:${name.toLowerCase()}` `` (e.g. `"card:sol ring"`, `"tok
 - Sources without `getDefaults` fall back to per-card `getOptions` queries with `{ offset: 0, limit: 1 }` for cards they missed in the batch.
 - Defaults resolve first-hit in config order: `picker.getDefaultPrints()` walks sources in array order, skipping cards already resolved. Only cards missed by earlier sources reach later ones.
 
-Example:
+### Scryfall's batching strategy
+
+The built-in Scryfall source partitions requests for efficiency:
+- **Plain cards (no `setHint`):** Uses `POST /cards/collection` in 75-card chunks (faster, batch-optimized endpoint).
+- **Tokens or `setHint`-ed cards:** Falls back to per-card `GET /cards/search` (required for exact token handling or set boost).
+
+This reduces traffic to tokens and edge cases while batching the common path.
+
+### Custom source example
 
 ```ts
 const mySource = defineSource({
