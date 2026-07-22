@@ -7,7 +7,7 @@
     "test": "pnpm -r test",
     "lint": "pnpm -r lint",
     "dev:demo": "pnpm --filter nextjs-demo dev",
-    "dev:loadtest": "pnpm --filter load-test dev",
+    "dev:test": "pnpm --filter test dev",
     "docs:llms": "tsx scripts/build-llm-docs.ts",
     "scrape:mpcfill": "tsx scripts/scrape-mpcfill-index.ts"
   },

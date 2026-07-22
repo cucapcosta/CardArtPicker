@@ -1,7 +1,7 @@
 import "./globals.css"
 import type { ReactNode } from "react"
 
-export const metadata = { title: "cardartpicker — load test" }
+export const metadata = { title: "cardartpicker — test" }
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (

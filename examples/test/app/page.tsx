@@ -18,7 +18,7 @@ export default function Home() {
   return (
     <main>
       <div className="lt-bar">
-        <span><span className="dot" />cardartpicker · load-test</span>
+        <span><span className="dot" />cardartpicker · test</span>
         <span>open · no auth</span>
       </div>
       <div style={{ padding: "1.5rem" }}>
