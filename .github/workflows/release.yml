@@ -25,7 +25,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          registry-url: https://registry.npmjs.org
           cache: pnpm
 
       - name: Resolve tag
@@ -57,10 +56,16 @@ jobs:
         working-directory: packages/cardartpicker
         run: pnpm pack --pack-destination ${{ github.workspace }}
 
-      - name: Publish to npm
-        run: pnpm --filter cardartpicker publish --no-git-checks --access public --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      # Trusted publishing (OIDC): requires the GitHub Actions trusted publisher
+      # configured on npmjs.com for this package (repo cucapcosta/CardArtPicker,
+      # workflow release.yml). Provenance is generated automatically; no token.
+      # npm >= 11.5.1 is needed for OIDC — node 22 bundles an older npm.
+      - name: Update npm for trusted publishing
+        run: npm install -g npm@latest
+
+      - name: Publish to npm (trusted publishing)
+        working-directory: packages/cardartpicker
+        run: npm publish --access public
 
       - name: Create GitHub Release
         env:
