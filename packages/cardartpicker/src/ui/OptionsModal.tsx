@@ -31,11 +31,19 @@ export function OptionsModal({ slotId, onClose }: { slotId: string; onClose: () 
   const wantsSweep =
     query !== "" && slot !== undefined && slot.hasMoreOptions && slot.options.length < FILTER_SWEEP_CAP
 
+  // If a sweep page fetch fails, loadMoreOptions records the error but hasMoreOptions
+  // stays true — without a guard the effect would re-fire immediately forever.
+  // Stop when a sweep attempt made no progress; retyping the filter retries.
+  const lastSweepLen = useRef(-1)
+  useEffect(() => { lastSweepLen.current = -1 }, [query])
+
   useEffect(() => {
     if (!wantsSweep || loadingMore) return
+    if (slot!.options.length === lastSweepLen.current) return
+    lastSweepLen.current = slot!.options.length
     setLoadingMore(true)
     void loadMoreOptions(slotId).finally(() => setLoadingMore(false))
-  }, [wantsSweep, loadingMore, loadMoreOptions, slotId])
+  }, [wantsSweep, loadingMore, slot, loadMoreOptions, slotId])
 
   if (!slot) return null
 

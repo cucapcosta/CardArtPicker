@@ -151,4 +151,31 @@ describe("OptionsModal filter", () => {
     fireEvent.change(screen.getByPlaceholderText(/filter/i), { target: { value: "zzz" } })
     await waitFor(() => expect(screen.getByText(/no prints match "zzz"/i)).toBeTruthy())
   })
+
+  it("stops sweeping when a page fetch keeps failing", async () => {
+    const all = [
+      ...Array.from({ length: 100 }, (_, i) => printOption("LEA", i)),
+      ...Array.from({ length: 20 }, (_, i) => printOption("SLD", 100 + i)),
+    ]
+    server.use(http.get("http://localhost/api/cardartpicker/options", ({ request }) => {
+      optionsRequests++
+      const offset = Number(new URL(request.url).searchParams.get("offset") ?? 0)
+      if (offset > 0) return new HttpResponse(null, { status: 500 })
+      const slice = all.slice(0, 100)
+      return HttpResponse.json([
+        { ok: true, source: "Scryfall", options: slice, total: all.length, hasMore: true },
+      ])
+    }))
+    render(
+      <CardPickerProvider apiBase="/api/cardartpicker">
+        <ModalHarness />
+      </CardPickerProvider>
+    )
+    await waitFor(() => expect(optionsRequests).toBe(1))
+    fireEvent.change(screen.getByPlaceholderText(/filter/i), { target: { value: "sld" } })
+    await waitFor(() => expect(optionsRequests).toBe(2))
+    // give any runaway retries a chance to fire, then assert none did
+    await new Promise(r => setTimeout(r, 300))
+    expect(optionsRequests).toBe(2)
+  })
 })
