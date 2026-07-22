@@ -213,7 +213,7 @@ type Source = {
 Key format: `` `${type}:${name.toLowerCase()}` `` (e.g. `"card:sol ring"`, `"token:embercleave"`).
 
 - Missing key in the map = no hit; the card is not filtered, just skipped.
-- Sources without `getDefaults` fall back to per-card `getOptions` queries with `{ offset: 0, limit: 1 }` for cards they missed in the batch.
+- Sources without `getDefaults` fall back to per-card `getOptions` queries with `{ offset: 0, limit: 1 }` for cards earlier sources missed.
 - Defaults resolve first-hit in config order: `picker.getDefaultPrints()` walks sources in array order, skipping cards already resolved. Only cards missed by earlier sources reach later ones.
 
 ### Scryfall's batching strategy
@@ -253,7 +253,7 @@ Multiple endpoints and calls happen along the user journey:
 1. **Default prints (fast path):** `POST /defaults` calls `picker.getDefaultPrints(cards)` in one batch per parse. Sources are walked in array order and only cards missed by earlier sources reach later ones. Put your most authoritative source (Scryfall) first.
 2. **Full options (lazy path):** `GET /options` calls `picker.searchCard(id)` in parallel when the user cycles or opens the modal. All sources are queried in parallel for this card.
 
-Both paths share the same cache key, so a second request for the same card is a cache hit.
+Defaults and options are cached under separate keys (`default:` vs `search:`), so a batch-resolved default does not warm the options cache — a later `GET /options` for that card still fetches `search:` entries upstream. Only the per-card fallback path (no `getDefaults`) warms both, since it calls `getSourcePage` directly.
 
 If your source is slow, this matters: it will block the default-print fast path if it is first in the array, and the parallel-fetch lazy path will be gated on its slowest source. Implement `getDefaults` (or optimize `getOptions`) for large batches.
 
