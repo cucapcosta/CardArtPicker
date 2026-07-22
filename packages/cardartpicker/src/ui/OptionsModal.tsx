@@ -2,12 +2,18 @@
 
 import { useEffect, useRef, useState } from "react"
 import { useCardPicker } from "cardartpicker/client"
+import type { CardOption } from "../types.js"
+
+const FILTER_SWEEP_CAP = 1000
 
 export function OptionsModal({ slotId, onClose }: { slotId: string; onClose: () => void }) {
   const { getSlot, selectOption, loadMoreOptions } = useCardPicker()
   const [loadingMore, setLoadingMore] = useState(false)
+  const [filter, setFilter] = useState("")
   const autoLoaded = useRef(false)
   const slot = getSlot(slotId)
+
+  const query = filter.trim().toLowerCase()
 
   // The slot only holds its default print until options are fetched on demand;
   // totalOptions <= options.length with hasMoreOptions set marks that unexpanded state.
@@ -21,6 +27,16 @@ export function OptionsModal({ slotId, onClose }: { slotId: string; onClose: () 
     void loadMoreOptions(slotId).finally(() => setLoadingMore(false))
   }, [needsInitialLoad, loadMoreOptions, slotId])
 
+  // While a filter is active, sweep remaining pages so the search covers all prints.
+  const wantsSweep =
+    query !== "" && slot !== undefined && slot.hasMoreOptions && slot.options.length < FILTER_SWEEP_CAP
+
+  useEffect(() => {
+    if (!wantsSweep || loadingMore) return
+    setLoadingMore(true)
+    void loadMoreOptions(slotId).finally(() => setLoadingMore(false))
+  }, [wantsSweep, loadingMore, loadMoreOptions, slotId])
+
   if (!slot) return null
 
   const handleLoadMore = async () => {
@@ -32,12 +48,20 @@ export function OptionsModal({ slotId, onClose }: { slotId: string; onClose: () 
 
   const remaining = slot.totalOptions - slot.options.length
 
-  const grouped = new Map<string, typeof slot.options>()
+  const matchesFilter = (o: CardOption): boolean => {
+    if (!query) return true
+    const fields = [o.meta.setCode, o.meta.artist, o.sourceName, ...(o.meta.tags ?? [])]
+    return fields.some(f => typeof f === "string" && f.toLowerCase().includes(query))
+  }
+
+  const grouped = new Map<string, CardOption[]>()
   for (const o of slot.options) {
+    if (!matchesFilter(o)) continue
     const arr = grouped.get(o.sourceName) ?? []
     arr.push(o)
     grouped.set(o.sourceName, arr)
   }
+  const matchCount = [...grouped.values()].reduce((n, arr) => n + arr.length, 0)
 
   return (
     <div
@@ -62,8 +86,17 @@ export function OptionsModal({ slotId, onClose }: { slotId: string; onClose: () 
               {slot.cardName}
             </h2>
             <span className="font-[family-name:var(--cap-font-mono)] text-[0.7rem] text-[var(--cap-accent-soft)]">
-              {slot.options.length}{slot.totalOptions > slot.options.length ? ` / ${slot.totalOptions}` : ""} options
+              {query
+                ? `${matchCount} matches / ${slot.options.length} options`
+                : `${slot.options.length}${slot.totalOptions > slot.options.length ? ` / ${slot.totalOptions}` : ""} options`}
             </span>
+            <input
+              value={filter}
+              onChange={e => setFilter(e.target.value)}
+              placeholder="filter · set / artist / source"
+              aria-label="Filter prints"
+              className="w-52 bg-transparent border border-[var(--cap-border)] focus:border-[var(--cap-accent)] outline-none px-2 py-1 font-[family-name:var(--cap-font-mono)] text-[0.7rem] tracking-widest text-[var(--cap-fg)] placeholder:text-[var(--cap-muted)]"
+            />
           </div>
           <button
             onClick={onClose}
@@ -119,9 +152,9 @@ export function OptionsModal({ slotId, onClose }: { slotId: string; onClose: () 
               </div>
             </section>
           ))}
-          {slot.options.length === 0 && (
+          {matchCount === 0 && (
             <div className="py-16 text-center font-[family-name:var(--cap-font-mono)] text-sm text-[var(--cap-muted)] uppercase tracking-widest">
-              no prints found
+              {query ? `no prints match "${filter.trim()}"` : "no prints found"}
             </div>
           )}
           {slot.hasMoreOptions && (
@@ -131,7 +164,9 @@ export function OptionsModal({ slotId, onClose }: { slotId: string; onClose: () 
                 disabled={loadingMore}
                 className="px-5 py-2 border border-[var(--cap-border)] hover:border-[var(--cap-accent)] disabled:opacity-40 disabled:cursor-wait text-[var(--cap-fg)] hover:text-[var(--cap-accent)] transition-colors font-[family-name:var(--cap-font-mono)] text-[0.7rem] uppercase tracking-[0.22em]"
               >
-                {loadingMore ? "loading..." : remaining > 0 ? `load ${Math.min(100, remaining)} more` : "load more"}
+                {loadingMore
+                  ? (query ? "loading all prints…" : "loading...")
+                  : remaining > 0 ? `load ${Math.min(100, remaining)} more` : "load more"}
               </button>
             </div>
           )}
