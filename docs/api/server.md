@@ -30,6 +30,44 @@ Returns the first option from the first source that has any options for the give
 
 Used by the hook on initial parse to render slots quickly.
 
+**Cache headers:** `Cache-Control: public, s-maxage=3600, stale-while-revalidate=86400`
+
+### `POST /defaults`
+
+Batch endpoint for resolving default prints. Returns a map of `(type:lowercased-name)` to `CardOption | null`.
+
+Request body:
+
+```ts
+{
+  cards: Array<{
+    name: string
+    type?: "card" | "token"   // defaults to "card"
+  }>
+}
+```
+
+Constraints: 1–500 entries per request.
+
+Response:
+
+```
+200 → Record<"type:name", CardOption | null>    (JSON)
+400 → { error: "invalid body" } or { error: "too many cards (max 500)" }
+```
+
+```ts
+{
+  "card:sol ring": { /* CardOption */ },
+  "token:embercleave": null,  // no source had this
+  ...
+}
+```
+
+Sources are walked in config order; only cards missed by earlier sources reach later ones. This significantly reduces traffic to slower sources.
+
+**Cache headers:** `Cache-Control: public, s-maxage=3600, stale-while-revalidate=86400`
+
 ### `GET /options?name=X&type=card|token`
 
 Returns the full `SourceResult[]` — every source's outcome, success or failure.
@@ -46,6 +84,8 @@ type SourceResult =
 ```
 
 Used by the hook lazily when the user cycles arrows or opens the options modal.
+
+**Cache headers:** `Cache-Control: public, s-maxage=3600, stale-while-revalidate=86400`
 
 ### `POST /parse`
 

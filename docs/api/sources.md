@@ -10,6 +10,7 @@ Import from `cardartpicker/sources`.
 type Source = {
   name: string
   getOptions(id: CardIdentifier): Promise<CardOption[]>
+  getDefaults?(ids: CardIdentifier[]): Promise<Map<string, CardOption>>   // optional batch
   getImage?(optionId: string): Promise<ArrayBuffer>   // optional override
 }
 
@@ -199,14 +200,54 @@ defineSource({
 
 `getImage` is called by `buildZip()` for the **front face only**. DFC back faces always go through plain `fetch(backImageUrl)` — keep `backImageUrl` as a publicly fetchable URL or pre-sign it inside `getOptions`.
 
+## Batch defaults via `getDefaults`
+
+The optional `getDefaults(ids: CardIdentifier[])` method allows a source to resolve multiple card defaults in a single request.
+
+```ts
+type Source = {
+  getDefaults?(ids: CardIdentifier[]): Promise<Map<string, CardOption>>
+}
+```
+
+Key format: `` `${type}:${name.toLowerCase()}` `` (e.g. `"card:sol ring"`, `"token:embercleave"`).
+
+- Missing key in the map = no hit; the card is not filtered, just skipped.
+- Sources without `getDefaults` fall back to per-card `getOptions` queries with `{ offset: 0, limit: 1 }` for cards they missed in the batch.
+- Defaults resolve first-hit in config order: `picker.getDefaultPrints()` walks sources in array order, skipping cards already resolved. Only cards missed by earlier sources reach later ones.
+
+Example:
+
+```ts
+const mySource = defineSource({
+  name: "My Source",
+  async getDefaults(ids) {
+    const results = new Map<string, CardOption>()
+    for (const id of ids) {
+      const key = `${id.type}:${id.name.toLowerCase()}`
+      // fetch from your backend...
+      if (found) {
+        results.set(key, cardOption)
+      }
+      // if not found, omit the key
+    }
+    return results
+  },
+  // getOptions still needed for full search
+  async getOptions(id) { /* ... */ },
+})
+```
+
 ## Progressive fetch implications
 
-`getOptions` is called twice along the user journey:
+Multiple endpoints and calls happen along the user journey:
 
-1. **Default print:** `picker.getDefaultPrint(name)` walks sources in array order and returns the first option from the first source that has any. Put your most authoritative source (Scryfall) first.
-2. **Full options:** `picker.searchCard(id)` calls all sources in parallel for the same card. Both calls share the same cache key, so the second call is a cache hit.
+1. **Default prints (fast path):** `POST /defaults` calls `picker.getDefaultPrints(cards)` in one batch per parse. Sources are walked in array order and only cards missed by earlier sources reach later ones. Put your most authoritative source (Scryfall) first.
+2. **Full options (lazy path):** `GET /options` calls `picker.searchCard(id)` in parallel when the user cycles or opens the modal. All sources are queried in parallel for this card.
 
-If your source is slow, this matters: it will block the default-print fast path if it is first in the array, and the parallel-fetch lazy path will be gated on its slowest source.
+Both paths share the same cache key, so a second request for the same card is a cache hit.
+
+If your source is slow, this matters: it will block the default-print fast path if it is first in the array, and the parallel-fetch lazy path will be gated on its slowest source. Implement `getDefaults` (or optimize `getOptions`) for large batches.
 
 ## Aggregation
 

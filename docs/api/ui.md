@@ -20,7 +20,7 @@ import { CardArtPicker } from "cardartpicker/ui"
 | Prop | Type | Default | Notes |
 |---|---|---|---|
 | `initialList` | `string` | — | Pasted into the importer textarea on mount |
-| `eagerLoad` | `boolean` | `false` | Reserved — fetch all options up-front (vs progressive) |
+| `eagerLoad` | `boolean` | `false` | When `true`, loads all options for all slots immediately after parse (backgrounds the load). When `false`, loads options lazily per-slot on first cycle or modal open. |
 | `apiBase` | `string` | `/api/cardartpicker` | Forwarded to the provider |
 | `className` | `string` | — | Applied to the outer wrapper |
 | `slots.header` | `ReactNode` | — | Rendered above the toolbar |

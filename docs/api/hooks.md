@@ -4,7 +4,7 @@ Import from `cardartpicker/client`. These are React 19 client modules — they c
 
 ## `<CardPickerProvider>`
 
-Provides the API base URL to the `useCardPicker` hook. The drop-in `<CardArtPicker>` UI wraps itself in this provider automatically — you only need it directly when using the hook standalone.
+Provides the API base URL and loading behavior to the `useCardPicker` hook. The drop-in `<CardArtPicker>` UI wraps itself in this provider automatically — you only need it directly when using the hook standalone.
 
 ```tsx
 import { CardPickerProvider } from "cardartpicker/client"
@@ -19,6 +19,7 @@ Props:
 | Prop | Type | Default | Notes |
 |---|---|---|---|
 | `apiBase` | `string` | `/api/cardartpicker` | Where the route handlers are mounted |
+| `eagerLoad` | `boolean` | `false` | When `true`, loads all options for all slots immediately after parse (backgrounds the load). When `false`, loads options lazily per-slot on first cycle or modal open. |
 | `children` | `ReactNode` | — | — |
 
 `useCardPicker()` throws `"useCardPicker must be used within <CardPickerProvider>"` if used outside the provider.
@@ -66,7 +67,7 @@ Each parsed line of quantity `N` expands into `N` slots, each with `quantity: 1`
 
 ### `parseList(text)`
 
-Calls `POST /parse` then fires `GET /default` per slot in parallel. Slots flip from `loading` to `ready` (or `not-found`) as defaults arrive.
+Calls `POST /parse` to tokenize the list, then fires `POST /defaults` with all unique card names to resolve defaults in one batch. Slots flip from `loading` to `ready` (or `not-found`) as the batch result arrives.
 
 ### `cycleOption(slotId, dir)`
 

@@ -39,11 +39,11 @@ browser                Next.js route handler           upstream sources
    │◄─────────────────────────┤                              │
    │   { mainboard, tokens }  │                              │
    │                          │                              │
-   │ GET /default?name=…      │                              │
-   ├─────────────────────────►│ picker.getDefaultPrint(name) │
-   │                          ├─────────────────────────────►│ Scryfall search
+   │ POST /defaults           │                              │
+   ├─────────────────────────►│ picker.getDefaultPrints(ids) │
+   │  { cards: [...] }        ├─────────────────────────────►│ Scryfall /cards/collection (75/chunk)
    │◄─────────────────────────┤                              │
-   │   CardOption | 404       │                              │
+   │  { "card:name": opt|null }│                              │
    │                          │                              │
    │ GET /options?name=…      │ picker.searchCard(id)        │
    ├─────────────────────────►├─── all sources in parallel ─►│
@@ -55,11 +55,11 @@ browser                Next.js route handler           upstream sources
 
 The picker avoids fetching every source for every card up-front. The cost would be O(cards × sources) for what is usually a 40-card paste.
 
-1. **Parse + default print (fast path).** On `parseList()`, the hook builds slots and immediately fires `GET /default` per slot. Each slot renders with one option as soon as Scryfall returns. Implementation: `useCardPicker.parseList` in `packages/cardartpicker/src/client/useCardPicker.ts`.
+1. **Parse + defaults (fast path).** On `parseList()`, the hook builds slots from the parsed list, then fires one `POST /defaults` request with all unique `(type, name)` pairs deduplicated across mainboard and tokens. Sources are walked in config order; only cards missed by earlier sources reach later ones. So MPC Fill sees no traffic for cards Scryfall resolves. Slots render with their default print as soon as the batch returns. Implementation: `useCardPicker.parseList` in `packages/cardartpicker/src/client/useCardPicker.ts`.
 2. **Cycle / open modal (lazy path).** First time the user cycles arrows or opens the options modal on a slot, the hook fires `GET /options` for that slot only and merges the full `SourceResult[]` into the slot. Implementation: `expandOptions()` guarded by an in-component `Set<string>` so each slot expands at most once per render.
-3. **Eager flag.** `<CardArtPicker eagerLoad />` is reserved for the eager path; the default flow is progressive.
+3. **Eager flag.** `<CardArtPicker eagerLoad />` (or `<CardPickerProvider eagerLoad>`) restores the old expand-everything-after-parse behavior. Default is `false` (lazy).
 
-Server-side, both `/default` and `/options` go through the same `picker.searchCard()` which is cached by `name+type` (default 1 hour TTL). So the second-and-onward request for the same card is ~free.
+Server-side, all routes share per-source per-card cache entries (default 1 hour TTL). Failures are negative-cached for 30 seconds. So the second-and-onward request for the same card is ~free.
 
 ## CORS rationale
 
