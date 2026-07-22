@@ -1,4 +1,4 @@
-import { CardArtPicker } from "cardartpicker/ui"
+import { CardArtPicker } from "../../components_old/CardArtPicker"
 
 const SAMPLE = `
 4 Lightning Bolt
@@ -14,12 +14,12 @@ TOKENS:
 2 Soldier
 `.trim()
 
-export default function Home() {
+export default function OldHome() {
   return (
     <main>
       <div className="lt-bar">
-        <span><span className="dot" />cardartpicker · load-test</span>
-        <span>open · no auth · <a href="/old">legacy version →</a></span>
+        <span><span className="dot" />cardartpicker · load-test · legacy component</span>
+        <span><a href="/">new version →</a></span>
       </div>
       <div style={{ padding: "1.5rem" }}>
         <CardArtPicker initialList={SAMPLE} apiBase="/api/cardartpicker" />
