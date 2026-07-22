@@ -49,7 +49,7 @@ async function runWithLimit<T>(items: T[], limit: number, fn: (t: T) => Promise<
   await Promise.all(workers)
 }
 
-export function CardPickerProvider({ children, apiBase = "/api/cardartpicker", eagerLoad = false }: { children: ReactNode; apiBase?: string; eagerLoad?: boolean }) {
+export function CardPickerProvider({ children, apiBase = "/api/cardartpicker", eagerLoad = false }: { children: ReactNode; apiBase?: string; eagerLoad?: boolean | undefined }) {
   const [list, setList] = useState<ListState>({ mainboard: [], tokens: [] })
   const [errors, setErrors] = useState<Error[]>([])
   const [loading, setLoading] = useState(false)

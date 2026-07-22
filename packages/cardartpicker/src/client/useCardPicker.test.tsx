@@ -80,6 +80,15 @@ describe("useCardPicker", () => {
     await waitFor(() => expect(result.current.optionsProgress).toBeNull())
   })
 
+  it("marks slots not-found when no source resolves the card", async () => {
+    server.use(http.post("http://localhost/api/cardartpicker/parse", () =>
+      HttpResponse.json({ mainboard: [{ quantity: 1, name: "Unknown Card", type: "card" }], tokens: [], warnings: [] })))
+    const { result } = renderHook(() => useCardPicker(), { wrapper: wrap })
+    await act(() => result.current.parseList("1 Unknown Card"))
+    await waitFor(() => expect(result.current.list.mainboard).toHaveLength(1))
+    await waitFor(() => expect(result.current.list.mainboard[0]!.status).toBe("not-found"))
+  })
+
   it("cycleOption rotates through filled options", async () => {
     const { result } = renderHook(() => useCardPicker(), { wrapper: wrap })
     await act(() => result.current.parseList("1 Sol Ring"))
