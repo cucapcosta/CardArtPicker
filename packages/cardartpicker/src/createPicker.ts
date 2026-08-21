@@ -53,15 +53,17 @@ export function createPicker(config: PickerConfig): Picker {
   const inflight = new Map<string, Promise<SourceResult>>()
 
   async function getSourcePage(src: Source, id: CardIdentifier, offset: number, limit: number): Promise<SourceResult> {
+    const key = pageKey(src.name, id, offset, limit)
+    // Successfully cached pages are served before the full-key lookup so a later
+    // failure (negative-cached at the full key) can't blank pages that already loaded.
+    const cached = await cache.get<SourceResult>(key)
+    if (cached) return cached
     const full = await cache.get<SourceResult>(fullKey(src.name, id))
     if (full) {
       if (!full.ok) return full
       const slice = full.options.slice(offset, offset + limit)
       return { ok: true, source: src.name, options: slice, total: full.total, hasMore: offset + slice.length < full.total }
     }
-    const key = pageKey(src.name, id, offset, limit)
-    const cached = await cache.get<SourceResult>(key)
-    if (cached) return cached
     const existing = inflight.get(key)
     if (existing) return existing
     const promise = (async () => {
@@ -86,6 +88,9 @@ export function createPicker(config: PickerConfig): Picker {
   }
 
   const defaultKey = (id: CardIdentifier) => `${id.type}:${id.name.toLowerCase()}`
+  // Result keys stay hint-free (client contract); only the cache entry is hint-scoped
+  // so a set-hinted default doesn't get served for hint-less requests of the same name.
+  const defaultCacheKey = (id: CardIdentifier) => `default:${defaultKey(id)}:${(id.setHint ?? "").toLowerCase()}`
 
   async function getDefaultPrints(ids: CardIdentifier[]): Promise<Record<string, CardOption | null>> {
     const result: Record<string, CardOption | null> = {}
@@ -93,7 +98,7 @@ export function createPicker(config: PickerConfig): Picker {
     for (const id of ids) {
       const k = defaultKey(id)
       if (k in result || pending.has(k)) continue
-      const cached = await cache.get<CardOption | null>(`default:${k}`)
+      const cached = await cache.get<CardOption | null>(defaultCacheKey(id))
       if (cached !== undefined) result[k] = cached
       else pending.set(k, id)
     }
@@ -120,15 +125,16 @@ export function createPicker(config: PickerConfig): Picker {
         })))
       }
       for (const [k, hit] of hits) {
-        if (!pending.has(k)) continue
+        const id = pending.get(k)
+        if (!id) continue
         result[k] = hit
         pending.delete(k)
-        await cache.set(`default:${k}`, hit, resolved.cacheTTL)
+        await cache.set(defaultCacheKey(id), hit, resolved.cacheTTL)
       }
     }
-    for (const k of pending.keys()) {
+    for (const [k, id] of pending) {
       result[k] = null
-      await cache.set(`default:${k}`, null, NEGATIVE_TTL_SECONDS)
+      await cache.set(defaultCacheKey(id), null, NEGATIVE_TTL_SECONDS)
     }
     return result
   }

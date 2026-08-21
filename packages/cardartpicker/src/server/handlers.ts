@@ -50,6 +50,7 @@ const DefaultsBody = z.object({
   cards: z.array(z.object({
     name: z.string().min(1),
     type: z.enum(["card", "token"]).default("card"),
+    setHint: z.string().min(1).optional(),
   })).min(1).max(500),
 })
 
@@ -79,8 +80,11 @@ export function createPostHandler(
       }
       const parsed = DefaultsBody.safeParse(body)
       if (!parsed.success) return new Response(JSON.stringify({ error: parsed.error.issues }), { status: 400, headers: jsonHeaders })
-      const map = await picker.getDefaultPrints(parsed.data.cards)
-      return new Response(JSON.stringify(map), { status: 200, headers: cacheHeaders })
+      const cards = parsed.data.cards.map(({ setHint, ...rest }) =>
+        setHint !== undefined ? { ...rest, setHint } : rest)
+      const map = await picker.getDefaultPrints(cards)
+      // POST responses are not CDN/browser cacheable — plain JSON headers, no false promise.
+      return new Response(JSON.stringify(map), { status: 200, headers: jsonHeaders })
     }
     if (route === "download") return downloadRoute(request)
     if (route === "upload") return uploadRoute(request)
