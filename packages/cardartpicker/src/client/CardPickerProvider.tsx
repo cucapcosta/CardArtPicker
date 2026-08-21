@@ -56,6 +56,11 @@ export function CardPickerProvider({ children, apiBase = "/api/cardartpicker", e
   const [optionsProgress, setOptionsProgress] = useState<Progress | null>(null)
   const [imageProgress, setImageProgress] = useState<Progress | null>(null)
   const expandPromises = useRef<Map<string, Promise<void>>>(new Map())
+  // Pages fetched per card (keyed by nameKey). The next page to request is this counter,
+  // NOT options.length / PAGE_SIZE: the server offset applies per source, while
+  // options.length merges every source, so deriving it from length skips pages
+  // whenever more than one source is configured.
+  const loadedPages = useRef<Map<string, number>>(new Map())
   const warmedUrls = useRef<Set<string>>(new Set())
   const stateRef = useRef<ListState>({ mainboard: [], tokens: [] })
   // Sync during render (idempotent) so children's effects in the same commit see the
@@ -85,10 +90,18 @@ export function CardPickerProvider({ children, apiBase = "/api/cardartpicker", e
       const total = results.reduce((sum, r) => sum + (r.ok ? r.total : 0), 0)
       const hasMore = results.some(r => r.ok && r.hasMore)
 
+      const nk = nameKey(type, name)
+      loadedPages.current.set(nk, Math.max(loadedPages.current.get(nk) ?? 0, page + 1))
+
       setList(prev => {
         const mapper = (s: Slot): Slot => {
           if (s.identifier.type !== type || s.cardName.toLowerCase() !== name.toLowerCase()) return s
-          const merged = page === 0 ? newOptions : [...s.options, ...newOptions]
+          // Page 0 replaces the provisional default-only list, but the selected option
+          // (e.g. a batched default print beyond the first page) must survive the swap.
+          const kept = page === 0
+            ? s.options.filter(o => o.id === s.selectedOptionId && !newOptions.some(n => n.id === o.id))
+            : s.options
+          const merged = [...kept, ...newOptions]
           const seen = new Set<string>()
           const deduped = merged.filter(o => { if (seen.has(o.id)) return false; seen.add(o.id); return true })
           const status: Slot["status"] =
@@ -137,6 +150,7 @@ export function CardPickerProvider({ children, apiBase = "/api/cardartpicker", e
     setOptionsProgress(null)
     setImageProgress(null)
     expandPromises.current.clear()
+    loadedPages.current.clear()
     warmedUrls.current.clear()
     let kicked: Slot[] = []
     try {
@@ -165,24 +179,47 @@ export function CardPickerProvider({ children, apiBase = "/api/cardartpicker", e
 
       const allSlots = [...mainboard, ...tokens]
       kicked = allSlots
-      const unique = new Map<string, { name: string; type: CardType }>()
+      const unique = new Map<string, { name: string; type: CardType; setHint?: string }>()
       for (const s of allSlots) {
         const k = nameKey(s.identifier.type, s.cardName)
-        if (!unique.has(k)) unique.set(k, { name: s.cardName, type: s.identifier.type })
+        if (!unique.has(k)) {
+          const { setHint } = s.identifier
+          unique.set(k, { name: s.cardName, type: s.identifier.type, ...(setHint ? { setHint } : {}) })
+        }
       }
-      if (unique.size > 0) {
-        const defaults = await getJson<Record<string, CardOption | null>>(`${apiBase}/defaults`, {
-          method: "POST",
-          body: JSON.stringify({ cards: [...unique.values()] }),
-          headers: { "Content-Type": "application/json" },
-        })
+      // Defaults are requested in chunks and applied as each chunk resolves, so early
+      // cards render while slow ones (source fallbacks, retries) are still in flight —
+      // one big request kept the whole grid on "loading" until the slowest card finished.
+      const cards = [...unique.values()]
+      const DEFAULTS_CHUNK = 60
+      const chunks: (typeof cards)[] = []
+      for (let i = 0; i < cards.length; i += DEFAULTS_CHUNK) chunks.push(cards.slice(i, i + DEFAULTS_CHUNK))
+      let defaultsFailed = false
+      await runWithLimit(chunks, 3, async chunk => {
+        try {
+          const defaults = await getJson<Record<string, CardOption | null>>(`${apiBase}/defaults`, {
+            method: "POST",
+            body: JSON.stringify({ cards: chunk }),
+            headers: { "Content-Type": "application/json" },
+          })
+          setList(prev => {
+            const mapper = (s: Slot): Slot => {
+              const raw = defaults[nameKey(s.identifier.type, s.cardName)]
+              if (raw === undefined) return s
+              if (raw === null) return { ...s, status: "not-found" }
+              const opt = proxyOption(raw)
+              return { ...s, options: [opt], selectedOptionId: opt.id, status: "ready", totalOptions: 1, hasMoreOptions: true }
+            }
+            return { mainboard: prev.mainboard.map(mapper), tokens: prev.tokens.map(mapper) }
+          })
+        } catch (e) {
+          defaultsFailed = true
+          setErrors(es => [...es, e as Error])
+        }
+      })
+      if (defaultsFailed) {
         setList(prev => {
-          const mapper = (s: Slot): Slot => {
-            const raw = defaults[nameKey(s.identifier.type, s.cardName)]
-            if (!raw) return { ...s, status: "not-found" }
-            const opt = proxyOption(raw)
-            return { ...s, options: [opt], selectedOptionId: opt.id, status: "ready", totalOptions: 1, hasMoreOptions: true }
-          }
+          const mapper = (s: Slot): Slot => s.status === "loading" ? { ...s, status: "not-found" } : s
           return { mainboard: prev.mainboard.map(mapper), tokens: prev.tokens.map(mapper) }
         })
       }
@@ -220,8 +257,10 @@ export function CardPickerProvider({ children, apiBase = "/api/cardartpicker", e
     const cur = [...after.mainboard, ...after.tokens].find(s => s.id === slotId) ?? slot
     const i = cur.options.findIndex(o => o.id === cur.selectedOptionId)
     const tentativeNext = dir === "next" ? i + 1 : i - 1
-    if (dir === "next" && tentativeNext >= cur.options.length && cur.hasMoreOptions) {
-      const nextPage = Math.floor(cur.options.length / PAGE_SIZE)
+    // totalOptions > options.length distinguishes "server really has more" from the
+    // unexpanded placeholder (total 1, hasMore true) — don't prefetch off the placeholder.
+    if (dir === "next" && tentativeNext >= cur.options.length && cur.hasMoreOptions && cur.totalOptions > cur.options.length) {
+      const nextPage = loadedPages.current.get(nameKey(cur.identifier.type, cur.cardName)) ?? 0
       try { await expandPage(cur.identifier.type, cur.cardName, nextPage) } catch {}
     }
 
@@ -241,7 +280,7 @@ export function CardPickerProvider({ children, apiBase = "/api/cardartpicker", e
   const loadMoreOptions = useCallback(async (slotId: string) => {
     const slot = [...stateRef.current.mainboard, ...stateRef.current.tokens].find(s => s.id === slotId)
     if (!slot || !slot.hasMoreOptions) return
-    const nextPage = Math.floor(slot.options.length / PAGE_SIZE)
+    const nextPage = loadedPages.current.get(nameKey(slot.identifier.type, slot.cardName)) ?? 0
     try { await expandPage(slot.identifier.type, slot.cardName, nextPage) }
     catch (e) { setErrors(es => [...es, e as Error]) }
   }, [expandPage])

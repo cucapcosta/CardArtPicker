@@ -99,7 +99,7 @@ describe("OptionsModal filter", () => {
     fireEvent.change(screen.getByPlaceholderText(/filter/i), { target: { value: "sld" } })
     await waitFor(() => expect(screen.queryByText("LEA")).toBeNull())
     expect(screen.getByText("SLD")).toBeTruthy()
-    expect(screen.getByText(/1 matches \/ 2 options/i)).toBeTruthy()
+    expect(screen.getByText(/1 matches \/ 3 options/i)).toBeTruthy()
   })
 
   it("sweeps remaining pages while a filter is active", async () => {
@@ -120,7 +120,7 @@ describe("OptionsModal filter", () => {
     // filter triggers the sweep for page 1; SLD prints appear
     await waitFor(() => expect(optionsRequests).toBe(2))
     await waitFor(() => expect(screen.getAllByText("SLD")).toHaveLength(20))
-    expect(screen.getByText(/20 matches \/ 120 options/i)).toBeTruthy()
+    expect(screen.getByText(/20 matches \/ 121 options/i)).toBeTruthy()
   })
 
   it("clearing the filter restores the full list", async () => {
@@ -137,7 +137,9 @@ describe("OptionsModal filter", () => {
     fireEvent.change(input, { target: { value: "" } })
     await waitFor(() => expect(screen.getByText("LEA")).toBeTruthy())
     expect(screen.getByText("SLD")).toBeTruthy()
-    expect(screen.getByText(/2 options/i)).toBeTruthy()
+    // 3 = 2 fetched prints + the selected default print, which is preserved
+    // across the page-0 swap now that it isn't part of the fetched page
+    expect(screen.getByText(/3 options/i)).toBeTruthy()
   })
 
   it("shows a no-match state naming the filter", async () => {
