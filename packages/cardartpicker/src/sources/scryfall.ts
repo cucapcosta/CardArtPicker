@@ -2,6 +2,7 @@ import pLimit from "p-limit"
 import type { CardIdentifier, CardOption, Source, SourcePage, SourcePageOptions } from "../types.js"
 import { defineSource } from "./index.js"
 import { withRetry } from "../retry.js"
+import { fetchWithTimeout } from "./fetch.js"
 
 const scryfallLimit = pLimit(3)
 
@@ -52,7 +53,9 @@ async function fetchScryfallOnce(id: CardIdentifier): Promise<CardOption[]> {
   const exact = `!"${id.name.replace(/"/g, "")}"`
   const q = id.type === "token" ? `${exact} layout:token` : exact
   const url = `https://api.scryfall.com/cards/search?unique=prints&q=${encodeURIComponent(q)}`
-  const res = await fetch(url, { headers: { Accept: "application/json", "User-Agent": UA } })
+  const res = await fetchWithTimeout(url, {
+    headers: { Accept: "application/json", "User-Agent": UA },
+  })
   if (!res.ok) {
     if (res.status === 404) return []
     const ra = Number(res.headers.get("Retry-After"))
@@ -88,8 +91,10 @@ async function withScryfallRetry<T>(fn: () => Promise<T>): Promise<T> {
   })
 }
 
+// Retry (and its backoff sleeps) wraps the limiter acquisition, so a sleeping
+// retry never occupies one of the 3 concurrency slots.
 async function fetchScryfall(id: CardIdentifier): Promise<CardOption[]> {
-  return withScryfallRetry(() => fetchScryfallOnce(id))
+  return withScryfallRetry(() => scryfallLimit(() => fetchScryfallOnce(id)))
 }
 
 type CacheEntry = { value: CardOption[]; expiresAt: number }
@@ -122,7 +127,7 @@ async function getFullList(id: CardIdentifier): Promise<CardOption[]> {
   if (existing) return existing
   const promise = (async () => {
     try {
-      const value = await scryfallLimit(() => fetchScryfall(id))
+      const value = await fetchScryfall(id)
       fullCache.set(k, { value, expiresAt: Date.now() + FULL_TTL_MS })
       evictFull()
       return value
@@ -138,11 +143,13 @@ const COLLECTION_CHUNK = 75
 
 type CollectionResponse = { data?: ScryfallCard[]; not_found?: unknown[] }
 
-async function fetchCollectionOnce(names: string[]): Promise<ScryfallCard[]> {
-  const res = await fetch("https://api.scryfall.com/cards/collection", {
+type CollectionIdentifier = { name: string; set?: string }
+
+async function fetchCollectionOnce(identifiers: CollectionIdentifier[]): Promise<ScryfallCard[]> {
+  const res = await fetchWithTimeout("https://api.scryfall.com/cards/collection", {
     method: "POST",
     headers: { Accept: "application/json", "Content-Type": "application/json", "User-Agent": UA },
-    body: JSON.stringify({ identifiers: names.map(name => ({ name })) }),
+    body: JSON.stringify({ identifiers }),
   })
   if (!res.ok) {
     const ra = Number(res.headers.get("Retry-After"))
@@ -153,8 +160,8 @@ async function fetchCollectionOnce(names: string[]): Promise<ScryfallCard[]> {
   return body.data ?? []
 }
 
-async function fetchCollection(names: string[]): Promise<ScryfallCard[]> {
-  return withScryfallRetry(() => fetchCollectionOnce(names))
+async function fetchCollection(identifiers: CollectionIdentifier[]): Promise<ScryfallCard[]> {
+  return withScryfallRetry(() => scryfallLimit(() => fetchCollectionOnce(identifiers)))
 }
 
 function matchesRequestedName(requested: string, card: ScryfallCard): boolean {
@@ -174,21 +181,29 @@ export const scryfall: Source = defineSource({
   },
   async getDefaults(ids: CardIdentifier[]): Promise<Map<string, CardOption>> {
     const hits = new Map<string, CardOption>()
-    const batchable = ids.filter(id => id.type === "card" && !id.setHint)
-    const searched = ids.filter(id => id.type !== "card" || id.setHint)
+    const batchable = ids.filter(id => id.type === "card")
+    const searched = ids.filter(id => id.type !== "card")
 
     const chunks: CardIdentifier[][] = []
     for (let i = 0; i < batchable.length; i += COLLECTION_CHUNK) {
       chunks.push(batchable.slice(i, i + COLLECTION_CHUNK))
     }
     const chunkResults = await Promise.all(
-      chunks.map(chunk => scryfallLimit(() => fetchCollection(chunk.map(c => c.name)).catch(() => [])))
+      chunks.map(chunk => fetchCollection(chunk.map(c =>
+        c.setHint ? { name: c.name, set: c.setHint.toLowerCase() } : { name: c.name }
+      )).catch(() => []))
     )
     chunks.forEach((chunk, i) => {
       const data = chunkResults[i] ?? []
       for (const id of chunk) {
-        const card = data.find(c => matchesRequestedName(id.name, c))
+        const hint = id.setHint?.toUpperCase()
+        const card = hint
+          ? data.find(c => matchesRequestedName(id.name, c) && c.set?.toUpperCase() === hint)
+          : data.find(c => matchesRequestedName(id.name, c))
         if (card) hits.set(`${id.type}:${id.name.toLowerCase()}`, mapCard(card))
+        // A set-specific identifier can miss (wrong/old set code); fall back to full search,
+        // which sorts the hinted set first when it exists.
+        else if (hint) searched.push(id)
       }
     })
 

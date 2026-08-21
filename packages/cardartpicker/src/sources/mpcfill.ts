@@ -1,6 +1,7 @@
 import type { CardIdentifier, CardOption, Source, SourcePage, SourcePageOptions } from "../types.js"
 import { defineSource } from "./index.js"
 import { withRetry } from "../retry.js"
+import { fetchWithTimeout } from "./fetch.js"
 
 type MpcSource = { pk: number; key: string; name: string; description: string; sourceType: string; externalLink: string }
 type SearchResponse = { results: Record<string, Record<string, string[]>> }
@@ -41,7 +42,7 @@ export function createMpcFill(opts: MpcFillOptions = {}): Source {
 
   async function loadSources(): Promise<MpcSource[]> {
     if (sourcesCache) return sourcesCache
-    const res = await fetch(`${baseUrl}/2/sources/`, { headers: { Accept: "application/json" } })
+    const res = await fetchWithTimeout(`${baseUrl}/2/sources/`, { headers: { Accept: "application/json" } })
     if (!res.ok) throw new Error(`MPC Fill /sources/ ${res.status}`)
     const body = (await res.json()) as { results: Record<string, MpcSource> }
     sourcesCache = Object.values(body.results)
@@ -49,7 +50,7 @@ export function createMpcFill(opts: MpcFillOptions = {}): Source {
   }
 
   async function search(id: CardIdentifier, sourcePKs: number[]): Promise<string[]> {
-    const res = await fetch(`${baseUrl}/2/editorSearch/`, {
+    const res = await fetchWithTimeout(`${baseUrl}/2/editorSearch/`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -99,7 +100,7 @@ export function createMpcFill(opts: MpcFillOptions = {}): Source {
   const HYDRATE_BATCH = 1000
 
   async function hydrateBatch(ids: string[]): Promise<CardsResponse["results"]> {
-    const res = await fetch(`${baseUrl}/2/cards/`, {
+    const res = await fetchWithTimeout(`${baseUrl}/2/cards/`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ cardIdentifiers: ids }),

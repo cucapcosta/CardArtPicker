@@ -219,8 +219,8 @@ Key format: `` `${type}:${name.toLowerCase()}` `` (e.g. `"card:sol ring"`, `"tok
 ### Scryfall's batching strategy
 
 The built-in Scryfall source partitions requests for efficiency:
-- **Plain cards (no `setHint`):** Uses `POST /cards/collection` in 75-card chunks (faster, batch-optimized endpoint).
-- **Tokens or `setHint`-ed cards:** Falls back to per-card `GET /cards/search` (required for exact token handling or set boost).
+- **Cards (with or without `setHint`):** Uses `POST /cards/collection` in 75-card chunks (faster, batch-optimized endpoint). `setHint` cards use a `{ name, set }` identifier so the batch returns the hinted print directly.
+- **Tokens, or `setHint`-ed cards whose set identifier misses (wrong/old set code):** Falls back to per-card `GET /cards/search` (required for exact token handling; the search boosts the hinted set to the front when it exists).
 
 This reduces traffic to tokens and edge cases while batching the common path.
 
