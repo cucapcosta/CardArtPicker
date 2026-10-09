@@ -50,6 +50,48 @@ describe("buildZip", () => {
     expect(names[1]).toMatch(/ 2\.png$/)
   })
 
+  it("keeps one file per selection when several selections share a card name", async () => {
+    // The client sends one quantity-1 selection per copy (e.g. "4 Sol Ring" → 4 slots).
+    const selections = Array.from({ length: 4 }, (_, i) => ({ slotId: `mainboard-0-${i}`, optionId: `a:x${i % 2}`, quantity: 1 }))
+    const resolver = async (id: string) => opt(id.slice(2))
+    const blob = await buildZip(selections, resolver)
+    const zip = await JSZip.loadAsync(await blob.arrayBuffer())
+    expect(Object.keys(zip.files).sort()).toEqual([
+      "sol-ring-copy1.png", "sol-ring-copy2.png", "sol-ring-copy3.png", "sol-ring-copy4.png",
+    ])
+  })
+
+  it("numbers copies across selections mixing quantities and DFCs", async () => {
+    const selections = [
+      { slotId: "mainboard-0", optionId: "a:dfc", quantity: 2 },
+      { slotId: "mainboard-1", optionId: "a:dfc", quantity: 1 },
+    ]
+    const resolver = async () => opt("dfc", { backImageUrl: "https://images.test/dfc-back.png" })
+    const blob = await buildZip(selections, resolver)
+    const zip = await JSZip.loadAsync(await blob.arrayBuffer())
+    expect(Object.keys(zip.files)).toHaveLength(6)
+  })
+
+  it("sends a non-generic User-Agent (Scryfall's image CDN 400s Node's default)", async () => {
+    server.use(http.get("https://images.test/ua.png", ({ request }) =>
+      request.headers.get("user-agent")?.startsWith("cardartpicker/")
+        ? HttpResponse.arrayBuffer(PNG.buffer)
+        : HttpResponse.json({ rule: "generic_user_agent" }, { status: 400 })))
+    const selections = [{ slotId: "mainboard-0", optionId: "a:ua", quantity: 1 }]
+    const blob = await buildZip(selections, async () => opt("ua"), { attempts: 1 })
+    const zip = await JSZip.loadAsync(await blob.arrayBuffer())
+    expect(Object.keys(zip.files)).toHaveLength(1)
+  })
+
+  it("treats an HTML response as a failure instead of saving it as an image", async () => {
+    server.use(http.get("https://images.test/html.png", () => HttpResponse.html("<html>quota</html>")))
+    const selections = [{ slotId: "mainboard-0", optionId: "a:html", quantity: 1 }]
+    const blob = await buildZip(selections, async () => opt("html"), { attempts: 1 })
+    const zip = await JSZip.loadAsync(await blob.arrayBuffer())
+    expect(Object.keys(zip.files)).toHaveLength(0)
+    expect((blob as Blob & { failures: unknown[] }).failures).toHaveLength(1)
+  })
+
   it("skips images that fail to fetch but keeps building", async () => {
     server.use(http.get("https://images.test/bad.png", () => HttpResponse.text("nope", { status: 500 })))
     const selections = [

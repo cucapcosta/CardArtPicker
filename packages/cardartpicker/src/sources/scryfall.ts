@@ -2,7 +2,7 @@ import pLimit from "p-limit"
 import type { CardIdentifier, CardOption, Source, SourcePage, SourcePageOptions } from "../types.js"
 import { defineSource } from "./index.js"
 import { withRetry } from "../retry.js"
-import { fetchWithTimeout } from "./fetch.js"
+import { fetchWithTimeout, USER_AGENT } from "./fetch.js"
 
 const scryfallLimit = pLimit(3)
 
@@ -41,7 +41,7 @@ function mapCard(card: ScryfallCard): CardOption {
   }
 }
 
-const UA = "cardartpicker/0.1 (+https://github.com/cucapcosta/CardArtPicker)"
+const UA = USER_AGENT
 
 class ScryfallError extends Error {
   constructor(public status: number, message: string, public retryAfterMs?: number) {

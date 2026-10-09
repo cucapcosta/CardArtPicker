@@ -329,11 +329,18 @@ export function CardPickerProvider({ children, apiBase = "/api/cardartpicker", e
     })
     if (!res.ok) throw new Error(`download ${res.status}`)
     const blob = await res.blob()
+    const failed = res.headers.get("X-Failed-Slots")
+    if (failed) {
+      const count = failed.split(",").filter(Boolean).length
+      setErrors(es => [...es, new Error(`download: ${count} of ${selections.length} prints failed (${failed})`)])
+    }
+    const filename = /filename="([^"]+)"/.exec(res.headers.get("Content-Disposition") ?? "")?.[1] ?? "proxies.zip"
     const a = document.createElement("a")
     a.href = URL.createObjectURL(blob)
-    a.download = "proxies.zip"
+    a.download = filename
     a.click()
-    URL.revokeObjectURL(a.href)
+    // Revoking synchronously can cancel the download before the browser reads the blob.
+    setTimeout(() => URL.revokeObjectURL(a.href), 60_000)
   }, [apiBase, list])
 
   const selections: Selections = useMemo(() => {

@@ -2,6 +2,7 @@ import JSZip from "jszip"
 import pLimit from "p-limit"
 import type { CardOption, Picker, Selection } from "../types.js"
 import { withRetry } from "../retry.js"
+import { USER_AGENT } from "../sources/fetch.js"
 
 export type BuildZipOptions = {
   concurrency?: number
@@ -38,11 +39,22 @@ async function fetchImage(
     const ctrl = new AbortController()
     const t = setTimeout(() => ctrl.abort(), opts.timeoutMs ?? 30_000)
     try {
-      const res = await fetch(url, { signal: ctrl.signal })
-      if (!res.ok) throw new Error(`image ${res.status}`)
+      const res = await fetch(url, { signal: ctrl.signal, headers: { "User-Agent": USER_AGENT } })
+      if (!res.ok) throw Object.assign(new Error(`image ${res.status}`), { status: res.status })
+      // Google Drive answers throttled/blocked requests with a 200 HTML page.
+      const type = res.headers.get("content-type") ?? ""
+      if (type.startsWith("text/")) throw new Error(`image not returned (${type.split(";")[0]})`)
       return await res.arrayBuffer()
     } finally { clearTimeout(t) }
-  }, { attempts: opts.attempts ?? 3, baseDelayMs: 100 })
+  }, {
+    attempts: opts.attempts ?? 4,
+    baseDelayMs: 250,
+    // A 4xx other than timeout/throttling won't change on retry.
+    shouldRetry: e => {
+      const status = (e as { status?: number }).status
+      return status === undefined || status >= 500 || status === 408 || status === 429
+    },
+  })
 }
 
 export async function buildZip(
@@ -55,24 +67,40 @@ export async function buildZip(
   const limit = pLimit(opts.concurrency ?? 8)
   const failures: Array<{ slotId: string; error: string }> = []
 
-  await Promise.all(selections.map(sel => limit(async () => {
+  // Fetch concurrently, but name files afterwards in selection order: the client sends
+  // one selection per copy, so several selections share a card name and must not
+  // overwrite each other in the archive.
+  type Fetched = { base: string; dfc: boolean; quantity: number; faces: Array<{ face: "front" | "back"; bytes: ArrayBuffer }> }
+  const fetched: Array<Fetched | null> = new Array(selections.length).fill(null)
+
+  await Promise.all(selections.map((sel, idx) => limit(async () => {
     const option = await resolver(sel.optionId)
     if (!option) { failures.push({ slotId: sel.slotId, error: "option not found" }); return }
     try {
-      const faces: Array<"front" | "back"> = option.backImageUrl ? ["front", "back"] : ["front"]
-      const base = slugify(option.cardName)
-      for (const face of faces) {
-        const bytes = await fetchImage(option, picker, opts, face)
-        for (let i = 0; i < sel.quantity; i++) {
-          const copySuffix = sel.quantity > 1 ? `-copy${i + 1}` : ""
-          const faceSuffix = option.backImageUrl ? ` ${face === "front" ? 1 : 2}` : ""
-          zip.file(`${base}${copySuffix}${faceSuffix}.png`, bytes)
-        }
-      }
+      const faceNames: Array<"front" | "back"> = option.backImageUrl ? ["front", "back"] : ["front"]
+      const faces = []
+      for (const face of faceNames) faces.push({ face, bytes: await fetchImage(option, picker, opts, face) })
+      fetched[idx] = { base: slugify(option.cardName) || "card", dfc: Boolean(option.backImageUrl), quantity: sel.quantity, faces }
     } catch (e) {
       failures.push({ slotId: sel.slotId, error: (e as Error).message })
     }
   })))
+
+  const totals = new Map<string, number>()
+  for (const f of fetched) if (f) totals.set(f.base, (totals.get(f.base) ?? 0) + f.quantity)
+  const used = new Map<string, number>()
+  for (const f of fetched) {
+    if (!f) continue
+    for (let i = 0; i < f.quantity; i++) {
+      const n = (used.get(f.base) ?? 0) + 1
+      used.set(f.base, n)
+      const copySuffix = (totals.get(f.base) ?? 0) > 1 ? `-copy${n}` : ""
+      for (const { face, bytes } of f.faces) {
+        const faceSuffix = f.dfc ? ` ${face === "front" ? 1 : 2}` : ""
+        zip.file(`${f.base}${copySuffix}${faceSuffix}.png`, bytes)
+      }
+    }
+  }
 
   const blob = await zip.generateAsync({ type: "blob" })
   return Object.assign(blob, { failures })
